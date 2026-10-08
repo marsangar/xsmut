@@ -76,6 +76,7 @@ map_mutations_to_human <- function(mutations, gene, species, species_protein_id 
                                    human_assembly = c("GRCh38", "GRCh37"), chain = NULL) {
   host <- ens_host(match.arg(human_assembly))
   mt <- as.data.table(mutations)
+  if (is_dndscv(mt)) mt <- as_xsmut(mt)
   if (!"gene" %in% names(mt)) stop("`mutations` needs a `gene` column")
   g <- toupper(gene)
   mt <- mt[toupper(mt$gene) == g]
@@ -85,40 +86,52 @@ map_mutations_to_human <- function(mutations, gene, species, species_protein_id 
   mt[, aa_pos := as.integer(aa_pos)]
 
   orth <- get_ortholog(gene, species, host = host)
-
-  # --- protein alignment -----------------------------------------------------
-  if (!is.null(species_protein_id) && species_protein_id != orth$target$protein_id) {
-    seq_h <- ens_protein_seq(orth$human$protein_id, host = host)
-    seq_t <- ens_protein_seq(species_protein_id, host = host)
-    aln <- .align_proteins(seq_h, seq_t)
-    orth$target$protein_id <- species_protein_id
-    note <- "pairwise alignment (pwalign) to user protein"
-  } else if (!is.null(orth$human$seq) && !is.null(orth$target$seq)) {
-    aln <- list(human = orth$human$seq, target = orth$target$seq)
-    note <- "Ensembl ortholog alignment"
-  } else {
-    seq_h <- ens_protein_seq(orth$human$protein_id, host = host)
-    seq_t <- ens_protein_seq(orth$target$protein_id, host = host)
-    aln <- .align_proteins(seq_h, seq_t)
-    note <- "pairwise alignment (pwalign)"
+  human_pid <- orth$human$protein_id
+  
+  # one isoform for all rows (argument) / per-row isoforms (column, e.g. dNdScv pid) / Ensembl's pick
+  if (!is.null(species_protein_id)) {
+    mt[, species_protein_id := species_protein_id]
+  } else if (!"species_protein_id" %in% names(mt)) {
+    mt[, species_protein_id := orth$target$protein_id]
   }
-  t2h <- .aln_map(aln$human, aln$target)          # target residue -> human residue
-  human_len <- sum(strsplit(aln$human, "")[[1]] != "-")
-  r2g <- .residue_to_genome(orth$human$protein_id, human_len, host = host)
-
-  # human chromosome name
-  hchrom <- ens_map_translation(orth$human$protein_id, 1, 1, host = host)$chrom[1]
-
-  mt[, human_aa_pos := NA_integer_]
-  ok <- !is.na(mt$aa_pos) & mt$aa_pos >= 1 & mt$aa_pos <= length(t2h)
-  mt[ok, human_aa_pos := t2h[aa_pos]]
+  mt[is.na(species_protein_id) | species_protein_id == "", species_protein_id := orth$target$protein_id]
+  
+  align_one <- function(pid) {
+    if (pid == orth$target$protein_id && !is.null(orth$human$seq) && !is.null(orth$target$seq)) {
+      aln <- list(human = orth$human$seq, target = orth$target$seq); note <- "Ensembl ortholog alignment"
+    } else {
+      seq_h <- ens_protein_seq(human_pid, host = host)
+      seq_t <- tryCatch(ens_protein_seq(pid, host = host), error = function(e) NULL)
+      if (is.null(seq_t)) return(list(aln = NULL, t2h = integer(), note = paste("unknown protein", pid)))
+      aln <- .align_proteins(seq_h, seq_t)
+      note <- if (pid == orth$target$protein_id) "pairwise alignment (pwalign)" else sprintf("pairwise alignment to %s", pid)
+    }
+    list(aln = aln, t2h = .aln_map(aln$human, aln$target), note = note)
+  }
+  pids <- unique(mt$species_protein_id)
+  alns <- setNames(lapply(pids, align_one), pids)
+  
+  human_len <- if (!is.null(orth$human$seq)) sum(strsplit(orth$human$seq, "")[[1]] != "-")
+  else nchar(ens_protein_seq(human_pid, host = host))
+  r2g    <- .residue_to_genome(human_pid, human_len, host = host)
+  hchrom <- ens_map_translation(human_pid, 1, 1, host = host)$chrom[1]
+  
+  mt[, `:=`(human_aa_pos = NA_integer_, map_note = NA_character_)]
+  for (pid in pids) {
+    a <- alns[[pid]]
+    i <- which(mt$species_protein_id == pid)
+    if (is.null(a$aln)) { mt[i, map_note := a$note]; next }
+    ok <- i[!is.na(mt$aa_pos[i]) & mt$aa_pos[i] >= 1 & mt$aa_pos[i] <= length(a$t2h)]
+    mt[ok, human_aa_pos := a$t2h[aa_pos]]
+    mt[i, map_note := data.table::fcase(
+      !is.na(human_aa_pos), a$note,
+      is.na(aa_pos), "no protein position",
+      aa_pos < 1 | aa_pos > length(a$t2h), "aa_pos outside protein",
+      default = "residue aligned to gap in human")]
+  }
   mt[, human_pos := r2g(human_aa_pos)]
   mt[, human_chrom := ifelse(is.na(human_pos), NA_character_, hchrom)]
   mt[, map_method := ifelse(!is.na(human_pos), "protein", NA_character_)]
-  mt[, map_note := ifelse(!is.na(human_pos), note,
-                          ifelse(ok & is.na(human_aa_pos), "residue aligned to gap in human",
-                                 ifelse(is.na(aa_pos), "no protein position", "aa_pos outside protein")))]
-
   # --- optional genomic liftOver for unmapped rows ---------------------------
   if (!is.null(chain) && all(c("chrom", "pos") %in% names(mt)) && any(is.na(mt$human_pos))) {
     if (!requireNamespace("rtracklayer", quietly = TRUE))
@@ -141,6 +154,5 @@ map_mutations_to_human <- function(mutations, gene, species, species_protein_id 
   }
 
   attr(mt, "ortholog") <- orth
-  attr(mt, "alignment") <- aln
-  mt[]
+  attr(mt, "alignment") <- lapply(alns, `[[`, "aln")   # one per species protein id  mt[]
 }

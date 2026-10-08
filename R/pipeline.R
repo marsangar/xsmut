@@ -24,6 +24,7 @@ xsmut_pipeline <- function(gene, mutations, species, assembly = NULL, cosmic,
     warning(gene, " has no COSMIC entries in the supplied files")
 
   model <- get_gene_model(gene, species = "homo_sapiens", human_assembly = human_assembly)
+  if (is_dndscv(mutations)) mutations <- as_xsmut(mutations)
   sp_mut <- map_mutations_to_human(mutations, gene, sp, human_assembly = human_assembly)
 
   label <- sprintf("%s (%s)", tools::toTitleCase(gsub("_", " ", sp)),

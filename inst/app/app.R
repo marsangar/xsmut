@@ -45,7 +45,9 @@ server <- function(input, output, session) {
 
   user_muts <- reactive({
     req(input$muts)
-    fread(input$muts$datapath)
+    f <- input$muts$datapath
+    x <- if (grepl("\\.rds$", input$muts$name, ignore.case = TRUE)) readRDS(f) else fread(f)
+    if (is_dndscv(x)) as_xsmut(x) else x
   })
 
   results <- eventReactive(input$go, {

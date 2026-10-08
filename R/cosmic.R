@@ -111,6 +111,8 @@ parse_aa_pos <- function(x) {
   out <- rep(NA_integer_, length(x))
   hit <- r > 0
   if (any(hit)) out[hit] <- as.integer(gsub("\\D", "", regmatches(x, r)))
+  bare <- is.na(out) & grepl("^\\d+", x)
+  if (any(bare)) out[bare] <- as.integer(sub("^(\\d+).*$", "\\1", x[bare]))
   out
 }
 
