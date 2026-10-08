@@ -10,7 +10,6 @@ Description: Checks genes against the COSMIC Cancer Gene Census, retrieves human
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 Depends: R (>= 4.1)
 Imports:
     httr2,
@@ -30,3 +29,4 @@ Suggests:
     IRanges
 biocViews: Software
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0

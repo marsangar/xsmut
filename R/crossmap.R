@@ -154,5 +154,6 @@ map_mutations_to_human <- function(mutations, gene, species, species_protein_id 
   }
 
   attr(mt, "ortholog") <- orth
-  attr(mt, "alignment") <- lapply(alns, `[[`, "aln")   # one per species protein id  mt[]
+  attr(mt, "alignment") <- lapply(alns, `[[`, "aln")   # one per species protein id  
+  mt[]
 }
