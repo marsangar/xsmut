@@ -29,7 +29,10 @@ plot_gene_mutations(
   show_pictograms = TRUE,
   pictograms = list(),
   pictogram_species = NULL,
-  pictogram_size = 0.14
+  pictogram_size = 0.14,
+  strip_p = TRUE,
+  label_gap = 0.9,
+  highlight_style = c("strong", "subtle")
 )
 }
 \arguments{
@@ -81,8 +84,8 @@ gives COSMIC more room than the species panel}
 
 \item{legend_position}{"right", "bottom" or "none"}
 
-\item{show_pictograms}{draw a species silhouette in the corner of each
-mutation panel (PhyloPic via the optional rphylopic package; needs internet
+\item{show_pictograms}{draw a species silhouette in the outer right corner
+of each mutation panel (PhyloPic via the optional rphylopic package; needs internet
 on first use per session, silently skipped otherwise)}
 
 \item{pictograms}{optional overrides, \code{list(species = ..., human = ...)};
@@ -91,7 +94,15 @@ each a PNG path, raster array, grob, or \code{FALSE} to hide that one}
 \item{pictogram_species}{scientific name used to look up the species
 silhouette; defaults to the name in \code{species_label}}
 
-\item{pictogram_size}{height of the pictogram as a fraction of its panel}
+\item{pictogram_size}{pictogram height as a fraction of its panel}
+
+\item{strip_p}{drop the "p." prefix from protein-change labels in the plot}
+
+\item{label_gap}{extra space between a lollipop head and its label, in label
+heights (the offset also grows with point size and halo)}
+
+\item{highlight_style}{"strong" (default: glow, thick ring, coloured stem,
+shaded guide band, larger label; good for slides) or "subtle"}
 }
 \value{
 a patchwork object (ggplot); use \code{print()} or \code{ggsave()}. If

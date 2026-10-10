@@ -30,8 +30,9 @@
   res
 }
 
-# x: NULL (look up `name` on PhyloPic), FALSE (none), a PNG path, a raster/array, or a grob
-.as_pictogram_grob <- function(x = NULL, name = NULL, colour = "grey25", alpha = 0.9) {
+# x: NULL (look up `name` on PhyloPic), FALSE (none), a PNG path, a raster/array, or a grob.
+# Returns list(img, aspect = width/height, credit) or NULL.
+.resolve_pictogram <- function(x = NULL, name = NULL, colour = "grey25", alpha = 0.9) {
   if (isFALSE(x)) return(NULL)
   credit <- NA_character_
   if (is.null(x)) {
@@ -45,22 +46,24 @@
     if (!requireNamespace("png", quietly = TRUE)) return(NULL)
     x <- png::readPNG(x)
   }
-  g <- if (inherits(x, "grob")) x else
-    tryCatch(grid::rasterGrob(x, x = grid::unit(1, "npc"), hjust = 1, interpolate = TRUE),
-             error = function(e) NULL)
-  if (is.null(g)) return(NULL)
-  attr(g, "credit") <- credit
-  g
+  d <- dim(x)
+  aspect <- if (!inherits(x, "grob") && length(d) >= 2 && all(d[1:2] > 0)) d[2] / d[1] else 1
+  list(img = x, aspect = aspect, credit = credit)
 }
 
-# Place a pictogram in the outer corner of a panel (beside its title strip).
-.add_pictogram <- function(p, grob, flip = FALSE, size = 0.14) {
-  if (is.null(grob)) return(p)
+# Pictogram in the outer right corner of the panel's full area, level with the
+# panel title (patchwork inset, image scaled to the inset box, right-aligned).
+.add_pictogram <- function(p, pic, flip = FALSE, size = 0.14) {
+  if (is.null(pic)) return(p)
+  g <- if (inherits(pic$img, "grob")) pic$img else
+    tryCatch(grid::rasterGrob(pic$img, x = grid::unit(1, "npc"), hjust = 1, interpolate = TRUE),
+             error = function(e) NULL)
+  if (is.null(g)) return(p)
   if (flip) {
-    p + patchwork::inset_element(grob, left = 1 - size * 2.5, bottom = 0, right = 1, top = size,
+    p + patchwork::inset_element(g, left = 1 - size * 2.5, bottom = 0, right = 1, top = size,
                                  align_to = "full", clip = FALSE, on_top = TRUE)
   } else {
-    p + patchwork::inset_element(grob, left = 1 - size * 2.5, bottom = 1 - size, right = 1, top = 1,
+    p + patchwork::inset_element(g, left = 1 - size * 2.5, bottom = 1 - size, right = 1, top = 1,
                                  align_to = "full", clip = FALSE, on_top = TRUE)
   }
 }

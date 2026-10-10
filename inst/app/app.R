@@ -32,7 +32,8 @@ ui <- fluidPage(
         numericInput("hs_top", "Top N COSMIC hotspot residues", 10, min = 1),
         numericInput("hs_window", "Close match window (± aa; 0 = same residue)", 3, min = 0),
         numericInput("hs_min", "Min. COSMIC samples per hotspot", 2, min = 1),
-        radioButtons("hs_col", "Halo colour", c("Gold" = "gold", "Red (slides)" = "red"), inline = TRUE)
+        radioButtons("hs_col", "Halo colour", c("Gold" = "gold", "Red (slides)" = "red"), inline = TRUE),
+        radioButtons("hs_style", "Highlight", c("Strong" = "strong", "Subtle" = "subtle"), inline = TRUE)
       ),
       selectInput("legend_pos", "Legend", c("right", "bottom", "none")),
       checkboxInput("pictos", "Species pictograms (PhyloPic; needs rphylopic + internet)", TRUE),
@@ -81,6 +82,7 @@ server <- function(input, output, session) {
                          hotspot_min_samples = input$hs_min,
                          highlight_colour = input$hs_col, legend_position = input$legend_pos,
                          show_pictograms = isTRUE(input$pictos),
+                         highlight_style = if (is.null(input$hs_style)) "strong" else input$hs_style,
                          compress_introns = input$compress, min_label_n = input$min_label),
           error = function(e) list(error = conditionMessage(e)))
       }

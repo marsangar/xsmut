@@ -105,12 +105,18 @@ plot_gene_mutations(model, cos, mm, species_label = "Macaca mulatta (Mmul_10)",
 The figure header shows the gene name and, when a Census file is given, its role
 (oncogene / TSG / fusion) and somatic tumour types.
 
-Each mutation panel carries a silhouette of its species (human on the COSMIC panel), fetched
+Plot labels omit the HGVS `p.` prefix (`strip_p = FALSE` to keep it; tables keep it) and sit
+clear of their lollipop heads (`label_gap` to adjust).
+
+Each mutation panel carries a silhouette of its species in its outer right corner (human on
+the COSMIC panel; `pictogram_size` = fraction of the panel height), fetched
 from [PhyloPic](https://www.phylopic.org) via the optional `rphylopic` package
 (`install.packages("rphylopic")`; internet needed on first use per session). Images not
 requiring attribution are preferred; any credits are in `res$pictogram_credits` and should be
 cited when required by the image licence. Turn off with `show_pictograms = FALSE`, or supply
-your own images: `pictograms = list(species = "macaque.png", human = FALSE)`. Each panel has a small-print line with
+your own images: `pictograms = list(species = "macaque.png", human = FALSE)`.
+
+Each panel has a small-print line with
 mapped/unmapped mutations and samples (species) or distinct mutations, calls and samples
 (COSMIC). Other layout options: `base_size`, `legend_position`, `panel_heights`. For PDFs use
 `ggsave("TP53.pdf", res$plot, width = 12, height = 8, device = cairo_pdf)`.
@@ -126,7 +132,9 @@ res <- xsmut_pipeline("TP53", muts, "macaque", "Mmul_10", cos,
 res$hotspot_matches   # match_type: "identical change", "same residue", "within N aa"
 ```
 
-Matched user mutations get a gold halo (`highlight_colour = "red"` for slides, or any R colour) and bold label, the hit COSMIC hotspot is ringed, and a
+Matched user mutations get a strong highlight (glow + ring, coloured stem, shaded guide band,
+larger bold label; `highlight_style = "subtle"` for a lighter version) in gold
+(`highlight_colour = "red"` for slides, or any R colour), the hit COSMIC hotspot is ringed, and a
 dashed guide runs through all panels. `cosmic_hotspots()` and `match_cosmic_hotspots()` can be
 used on their own. COSMIC residue numbers follow COSMIC's transcript (usually MANE); user
 residues follow the Ensembl human ortholog protein, so check genes where the two differ.

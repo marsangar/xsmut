@@ -106,30 +106,44 @@ NULL
   paste(strwrap(paste(parts, collapse = "  \u00b7  "), width = width), collapse = "\n")
 }
 
+# vertical guide through highlighted positions: soft band + dashed core line
+.hl_guides <- function(x, hl_col, strong = TRUE) {
+  if (!length(x)) return(NULL)
+  if (strong) {
+    list(geom_vline(xintercept = x, colour = grDevices::adjustcolor(hl_col, alpha.f = 0.22), linewidth = 2.6),
+         geom_vline(xintercept = x, colour = hl_col, alpha = 0.9, linewidth = 0.45, linetype = "dashed"))
+  } else {
+    list(geom_vline(xintercept = x, colour = hl_col, alpha = 0.5, linewidth = 0.35, linetype = "dashed"))
+  }
+}
+
 .lollipop <- function(dt, tf, title, subtitle = NULL, flip = FALSE, min_label_n = 3,
                       hl_x = NULL, hl_col = "#E0A800", base_size = 11,
-                      title_face = "bold") {
+                      title_face = "bold", strip_p = TRUE, label_gap = 0.9,
+                      hl_strong = TRUE) {
   # dt: pos, aa_change, consequence, n, [hl (logical)]
   dt <- as.data.table(dt)
   small <- base_size * 0.75
-  # panel titles: top panel -> above; flipped (bottom) panel -> at its base
+  # panel titles: top panel -> above; flipped (bottom) panel -> at its base.
   title_layer <- if (flip) {
     list(labs(title = NULL, subtitle = NULL, x = title, caption = subtitle),
          theme(axis.title.x = element_text(face = title_face, size = base_size, hjust = 0,
-                                           margin = margin(t = 3)),
+                                           margin = margin(t = 1, unit = "mm")),
                plot.caption = element_text(size = small, colour = "grey35", hjust = 0,
-                                           margin = margin(t = 1)),
+                                           margin = margin(t = 0.4, unit = "mm")),
                plot.caption.position = "panel",
                plot.margin = margin(0, 5.5, 5.5, 5.5)))
   } else {
     list(labs(title = title, subtitle = subtitle, x = NULL),
-         theme(plot.title = element_text(face = title_face, size = base_size, margin = margin(b = 1)),
-               plot.subtitle = element_text(size = small, colour = "grey35", margin = margin(b = 3)),
+         theme(plot.title = element_text(face = title_face, size = base_size,
+                                         margin = margin(b = 0.4, unit = "mm")),
+               plot.subtitle = element_text(size = small, colour = "grey35",
+                                            margin = margin(b = 1, unit = "mm")),
                plot.margin = margin(5.5, 5.5, 0, 5.5)))
   }
   if (!nrow(dt)) {
-    return(ggplot() + annotate("text", x = 0.5, y = 0.5, label = "no mappable mutations",
-                               colour = "grey50", size = small / .pt) +
+    return(ggplot() + annotate("text", x = -Inf, y = 0.5, label = "no mappable mutations",
+                               hjust = -0.05, colour = "grey50", size = small / .pt) +
              theme_void(base_size = base_size) + title_layer)
   }
   if (!"hl" %in% names(dt)) dt[, hl := FALSE]
@@ -137,27 +151,41 @@ NULL
   dt[, class := .consequence_class(consequence)]
   dt[, x := tf(pos)]
   dt[, ymax := if (flip) -n else n]
+  # display label: drop the HGVS "p." prefix (saves space)
+  dt[, label := if (strip_p) sub("^p\\.", "", as.character(aa_change)) else as.character(aa_change)]
+
+  # label offset scaled to each point's radius (scale_size_area: size = max_size * sqrt(n / max n)),
+  # plus the halo, plus a fixed gap, expressed in label heights (vjust units)
+  max_size <- 5
+  lab_size <- base_size * 0.62 / .pt                       # font size in mm
+  r_mm <- max_size * sqrt(dt$n / max(dt$n)) / 2 + ifelse(dt$hl, if (hl_strong) 1.8 else 0.9, 0.15)
+  off <- r_mm / (0.75 * lab_size) + label_gap
+  dt[, vj := if (flip) 1 + off else -off]
+
   lab    <- dt[n >= min_label_n & !hl]
   lab_hl <- dt[hl == TRUE]
 
-  p <- ggplot(dt)
-  if (length(hl_x)) {
-    p <- p + geom_vline(xintercept = tf(hl_x), colour = hl_col, alpha = 0.5,
-                        linewidth = 0.35, linetype = "dashed")
-  }
-  p <- p +
+  p <- ggplot(dt) + .hl_guides(tf(hl_x), hl_col, hl_strong) +
     geom_segment(aes(x = x, xend = x, y = 0, yend = ymax), colour = "grey55", linewidth = 0.3)
   if (nrow(lab_hl)) {
-    # halo drawn underneath the point: thick border of the same mapped size
+    # halo drawn underneath the point (thick border of the same mapped size);
+    # strong mode adds a wide translucent glow and a thicker highlighted stem
+    if (hl_strong) {
+      p <- p +
+        geom_segment(data = lab_hl, aes(x = x, xend = x, y = 0, yend = ymax),
+                     colour = hl_col, linewidth = 0.9) +
+        geom_point(data = lab_hl, aes(x = x, y = ymax, size = n), shape = 21,
+                   fill = NA, colour = grDevices::adjustcolor(hl_col, alpha.f = 0.35), stroke = 5)
+    }
     p <- p + geom_point(data = lab_hl, aes(x = x, y = ymax, size = n), shape = 21,
-                        fill = NA, colour = hl_col, stroke = 2.4)
+                        fill = NA, colour = hl_col, stroke = if (hl_strong) 2.6 else 2.4)
   }
   p <- p +
     geom_point(aes(x = x, y = ymax, colour = class, size = n), alpha = 0.9) +
     scale_colour_manual(values = .pal, drop = TRUE, name = "Consequence") +
-    scale_size_area(max_size = 5, guide = "none") +
+    scale_size_area(max_size = max_size, guide = "none") +
     scale_y_continuous(breaks = .int_breaks, labels = function(v) .fmt_n(abs(v)),
-                       expand = if (flip) expansion(mult = c(0.22, 0)) else expansion(mult = c(0, 0.22))) +
+                       expand = if (flip) expansion(mult = c(0.32, 0)) else expansion(mult = c(0, 0.32))) +
     labs(y = "Samples") +
     theme_classic(base_size = base_size) +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.line.x = element_blank(),
@@ -169,21 +197,20 @@ NULL
           legend.title = element_text(size = small, face = "bold"),
           legend.text = element_text(size = small)) +
     title_layer
-  vj <- if (flip) 1.7 else -0.9
-  lab_size <- base_size * 0.62 / .pt
   if (nrow(lab)) {
-    p <- p + geom_text(data = lab, aes(x = x, y = ymax, label = aa_change),
-                       vjust = vj, size = lab_size, colour = "grey15", check_overlap = TRUE)
+    p <- p + geom_text(data = lab, aes(x = x, y = ymax, label = label, vjust = vj),
+                       size = lab_size, colour = "grey15", check_overlap = TRUE)
   }
   if (nrow(lab_hl)) {
-    p <- p + geom_text(data = lab_hl, aes(x = x, y = ymax, label = aa_change),
-                       vjust = vj, size = lab_size * 1.05, fontface = "bold", colour = .darken(hl_col, 0.8))
+    p <- p + geom_text(data = lab_hl, aes(x = x, y = ymax, label = label, vjust = vj),
+                       size = lab_size * if (hl_strong) 1.2 else 1.05, fontface = "bold",
+                       colour = .darken(hl_col, if (hl_strong) 0.7 else 0.8))
   }
   p
 }
 
 .gene_track <- function(model, tf, show_exon_numbers = TRUE, intron_linewidth = 1.1,
-                        hl_x = NULL, hl_col = "#E0A800", base_size = 11) {
+                        hl_x = NULL, hl_col = "#E0A800", base_size = 11, hl_strong = TRUE) {
   ex <- as.data.table(model$exons)
   ex[, `:=`(px = tf(start), pxend = tf(end))]
   ex[, h := ifelse(feature == "CDS", 0.42, 0.22)]
@@ -193,12 +220,7 @@ NULL
   locus <- sprintf("%s  \u00b7  chr%s:%s-%s  \u00b7  %s  \u00b7  %s  \u00b7  %s",
                    model$gene$symbol, model$gene$chrom, .fmt_n(model$gene$start),
                    .fmt_n(model$gene$end), model$transcript$id, model$gene$assembly, strand_lab)
-  p <- ggplot()
-  if (length(hl_x)) {
-    p <- p + geom_vline(xintercept = tf(hl_x), colour = hl_col, alpha = 0.5,
-                        linewidth = 0.35, linetype = "dashed")
-  }
-  p <- p +
+  p <- ggplot() + .hl_guides(tf(hl_x), hl_col, hl_strong) +
     annotate("segment", x = min(merged$px), xend = max(merged$pxend), y = 0, yend = 0,
              colour = "grey35", linewidth = intron_linewidth, lineend = "butt") +
     geom_rect(data = ex, aes(xmin = px, xmax = pxend, ymin = -h, ymax = h, fill = feature), colour = NA) +
@@ -251,14 +273,19 @@ NULL
 #' @param panel_heights relative heights c(upper, gene model, lower); default
 #'   gives COSMIC more room than the species panel
 #' @param legend_position "right", "bottom" or "none"
-#' @param show_pictograms draw a species silhouette in the corner of each
-#'   mutation panel (PhyloPic via the optional rphylopic package; needs internet
+#' @param show_pictograms draw a species silhouette in the outer right corner
+#'   of each mutation panel (PhyloPic via the optional rphylopic package; needs internet
 #'   on first use per session, silently skipped otherwise)
 #' @param pictograms optional overrides, `list(species = ..., human = ...)`;
 #'   each a PNG path, raster array, grob, or `FALSE` to hide that one
 #' @param pictogram_species scientific name used to look up the species
 #'   silhouette; defaults to the name in `species_label`
-#' @param pictogram_size height of the pictogram as a fraction of its panel
+#' @param pictogram_size pictogram height as a fraction of its panel
+#' @param strip_p drop the "p." prefix from protein-change labels in the plot
+#' @param label_gap extra space between a lollipop head and its label, in label
+#'   heights (the offset also grows with point size and halo)
+#' @param highlight_style "strong" (default: glow, thick ring, coloured stem,
+#'   shaded guide band, larger label; good for slides) or "subtle"
 #' @return a patchwork object (ggplot); use `print()` or `ggsave()`. If
 #'   highlighting is on, the match table is in `attr(p, "hotspot_matches")`.
 #' @export
@@ -272,8 +299,10 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
                                 max_tumour_types = 8, panel_heights = NULL,
                                 legend_position = "right", show_pictograms = TRUE,
                                 pictograms = list(), pictogram_species = NULL,
-                                pictogram_size = 0.14) {
+                                pictogram_size = 0.14, strip_p = TRUE, label_gap = 0.9,
+                                highlight_style = c("strong", "subtle")) {
   species_panel <- match.arg(species_panel)
+  hl_strong <- match.arg(highlight_style) == "strong"
   hl_col <- .resolve_colour(highlight_colour)
   small <- base_size * 0.75
   tr <- .make_transform(model$exons, compress_introns)
@@ -333,34 +362,38 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
   ), collapse = "  \u00b7  ")
   cs_title <- sprintf("Human COSMIC (%s)", model$gene$assembly)
 
-  # --- panels ----------------------------------------------------------------
+  # --- pictograms (species silhouette on its panel, human on COSMIC) ----------
   sp_top <- species_panel == "top"
+  pic_sp <- pic_hs <- NULL
+  if (isTRUE(show_pictograms)) {
+    pic_sp <- .resolve_pictogram(pictograms$species,
+                                 name = if (is.null(pictogram_species)) sp_name else pictogram_species)
+    pic_hs <- .resolve_pictogram(pictograms$human, name = "Homo sapiens")
+  }
+  credits <- unlist(lapply(list(pic_sp, pic_hs), function(x)
+    if (!is.null(x) && !is.na(x$credit) && nzchar(x$credit)) x$credit))
+
+  # --- panels ----------------------------------------------------------------
   p_sp <- .lollipop(sp_agg, tf, sp_name, sp_sub, flip = !sp_top, min_label_n = 1,
                     hl_x = hl_x, hl_col = hl_col, base_size = base_size,
-                    title_face = if (italic_species) "bold.italic" else "bold")
+                    title_face = if (italic_species) "bold.italic" else "bold",
+                    strip_p = strip_p, label_gap = label_gap,
+                    hl_strong = hl_strong)
   p_cs <- .lollipop(cs_agg, tf, cs_title, cs_sub, flip = sp_top, min_label_n = min_label_n,
-                    hl_x = hl_x, hl_col = hl_col, base_size = base_size)
+                    hl_x = hl_x, hl_col = hl_col, base_size = base_size,
+                    strip_p = strip_p, label_gap = label_gap,
+                    hl_strong = hl_strong)
   mid <- .gene_track(model, tf, intron_linewidth = intron_linewidth,
-                     hl_x = hl_x, hl_col = hl_col, base_size = base_size)
+                     hl_x = hl_x, hl_col = hl_col, base_size = base_size, hl_strong = hl_strong)
 
   xr <- range(c(tf(model$exons$start), tf(model$exons$end), tf(cs_agg$pos), tf(sp_agg$pos)), na.rm = TRUE)
   pad <- diff(xr) * 0.02
   lock <- function(p) p + coord_cartesian(xlim = xr + c(-pad, pad), clip = "off")
   p_sp <- lock(p_sp); p_cs <- lock(p_cs)
 
-  # --- pictograms (species silhouette on its panel, human on COSMIC) ----------
-  credits <- character()
-  if (isTRUE(show_pictograms)) {
-    g_sp <- .as_pictogram_grob(pictograms$species,
-                               name = if (is.null(pictogram_species)) sp_name else pictogram_species)
-    g_hs <- .as_pictogram_grob(pictograms$human, name = "Homo sapiens")
-    for (g in list(g_sp, g_hs)) {
-      cr <- attr(g, "credit")
-      if (!is.null(cr) && !is.na(cr) && nzchar(cr)) credits <- c(credits, cr)
-    }
-    p_sp <- .add_pictogram(p_sp, g_sp, flip = !sp_top, size = pictogram_size)
-    p_cs <- .add_pictogram(p_cs, g_hs, flip = sp_top, size = pictogram_size)
-  }
+  # pictogram in the outer right corner of each mutation panel
+  p_sp <- .add_pictogram(p_sp, pic_sp, flip = !sp_top, size = pictogram_size)
+  p_cs <- .add_pictogram(p_cs, pic_hs, flip = sp_top, size = pictogram_size)
   mid <- mid + coord_cartesian(xlim = xr + c(-pad, pad), ylim = c(-0.8, 0.8), clip = "off")
 
   panels <- if (sp_top) list(p_sp, mid, p_cs) else list(p_cs, mid, p_sp)
