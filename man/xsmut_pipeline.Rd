@@ -12,6 +12,11 @@ xsmut_pipeline(
   cosmic,
   census_path = NULL,
   human_assembly = c("GRCh38", "GRCh37"),
+  species_panel = c("top", "bottom"),
+  highlight_hotspots = FALSE,
+  hotspot_top_n = 10,
+  hotspot_window = 3,
+  hotspot_min_samples = 2,
   ...
 )
 }
@@ -30,10 +35,23 @@ xsmut_pipeline(
 
 \item{human_assembly}{"GRCh38" or "GRCh37" (must match your COSMIC download)}
 
-\item{...}{passed to \code{\link[=plot_gene_mutations]{plot_gene_mutations()}}}
+\item{species_panel}{"top" (default) or "bottom": where user mutations are drawn}
+
+\item{highlight_hotspots}{highlight user mutations at/near top COSMIC hotspots}
+
+\item{hotspot_top_n}{number of top COSMIC residues treated as hotspots}
+
+\item{hotspot_window}{max distance (human aa) for a close match; 0 = same residue}
+
+\item{hotspot_min_samples}{minimum COSMIC samples for a residue to count}
+
+\item{...}{passed to \code{\link[=plot_gene_mutations]{plot_gene_mutations()}}, e.g. \code{highlight_colour = "red"},
+\code{base_size}, \code{legend_position}, \code{panel_heights}, \code{show_pictograms}}
 }
 \value{
-list: gene_check, model, cosmic_mutations, species_mutations, plot
+list: gene_check, species, species_name, assembly, model,
+cosmic_mutations, species_mutations, hotspot_matches (NULL unless
+highlighting), pictogram_credits (PhyloPic attributions to cite), plot
 }
 \description{
 Run the full cross-species comparison for one gene

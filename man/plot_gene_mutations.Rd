@@ -2,16 +2,34 @@
 % Please edit documentation in R/plot.R
 \name{plot_gene_mutations}
 \alias{plot_gene_mutations}
-\title{Plot human COSMIC mutations (top) vs species mutations (bottom) on a gene model}
+\title{Plot user (species) mutations and human COSMIC mutations on a human gene model}
 \usage{
 plot_gene_mutations(
   model,
   cosmic,
   species_mut,
   species_label = "Species",
+  species_panel = c("top", "bottom"),
+  gene_info = NULL,
   compress_introns = TRUE,
   coding_only = TRUE,
-  min_label_n = 3
+  min_label_n = 3,
+  highlight_hotspots = FALSE,
+  hotspot_top_n = 10,
+  hotspot_window = 3,
+  hotspot_min_samples = 2,
+  hotspot_matches = NULL,
+  highlight_colour = "gold",
+  intron_linewidth = 1.1,
+  base_size = 11,
+  italic_species = TRUE,
+  max_tumour_types = 8,
+  panel_heights = NULL,
+  legend_position = "right",
+  show_pictograms = TRUE,
+  pictograms = list(),
+  pictogram_species = NULL,
+  pictogram_size = 0.14
 )
 }
 \arguments{
@@ -21,19 +39,66 @@ plot_gene_mutations(
 \code{aa_change}, \code{consequence})}
 
 \item{species_mut}{data.table from \code{\link[=map_mutations_to_human]{map_mutations_to_human()}} (needs
-\code{human_pos}; optional \code{aa_change}, \code{consequence})}
+\code{human_pos}; optional \code{aa_change}, \code{consequence}, \code{sample_id})}
 
-\item{species_label}{label for the lower panel, e.g. "Macaque (Mmul_10)"}
+\item{species_label}{label for the species panel, e.g. "Macaca mulatta (Mmul_10)".
+A trailing "(assembly)" is moved to the small-print line.}
+
+\item{species_panel}{where the user mutations go: "top" (default; COSMIC is
+then drawn below the gene model) or "bottom" (COSMIC on top)}
+
+\item{gene_info}{optional one-row table from \code{\link[=cosmic_gene_listed]{cosmic_gene_listed()}}; its
+role (oncogene / TSG / fusion) and somatic tumour types are shown in the
+figure header}
 
 \item{compress_introns}{squeeze introns to a fixed width so exons dominate}
 
 \item{coding_only}{drop COSMIC rows without a protein change}
 
-\item{min_label_n}{label mutations recurring in at least this many samples}
+\item{min_label_n}{label COSMIC mutations recurring in at least this many samples}
+
+\item{highlight_hotspots}{highlight user mutations at/near the top COSMIC
+hotspot residues (see \code{\link[=match_cosmic_hotspots]{match_cosmic_hotspots()}})}
+
+\item{hotspot_top_n, hotspot_window, hotspot_min_samples}{passed to
+\code{\link[=match_cosmic_hotspots]{match_cosmic_hotspots()}}}
+
+\item{hotspot_matches}{optional precomputed result of \code{\link[=match_cosmic_hotspots]{match_cosmic_hotspots()}}}
+
+\item{highlight_colour}{halo colour for matches: "gold" (default), "red"
+(more visible on slides) or any R colour}
+
+\item{intron_linewidth}{line width of the intron backbone in the gene track}
+
+\item{base_size}{base font size (pt); small print is 75\% of it}
+
+\item{italic_species}{draw the species name in italics}
+
+\item{max_tumour_types}{truncate the COSMIC somatic tumour-type list}
+
+\item{panel_heights}{relative heights c(upper, gene model, lower); default
+gives COSMIC more room than the species panel}
+
+\item{legend_position}{"right", "bottom" or "none"}
+
+\item{show_pictograms}{draw a species silhouette in the corner of each
+mutation panel (PhyloPic via the optional rphylopic package; needs internet
+on first use per session, silently skipped otherwise)}
+
+\item{pictograms}{optional overrides, \code{list(species = ..., human = ...)};
+each a PNG path, raster array, grob, or \code{FALSE} to hide that one}
+
+\item{pictogram_species}{scientific name used to look up the species
+silhouette; defaults to the name in \code{species_label}}
+
+\item{pictogram_size}{height of the pictogram as a fraction of its panel}
 }
 \value{
-a patchwork object (ggplot); use \code{print()} or \code{ggsave()}
+a patchwork object (ggplot); use \code{print()} or \code{ggsave()}. If
+highlighting is on, the match table is in \code{attr(p, "hotspot_matches")}.
 }
 \description{
-Plot human COSMIC mutations (top) vs species mutations (bottom) on a gene model
+Publication-oriented layout: mutation panels sit flush against the gene
+model, the lower panel carries its title at its base, sample axes use
+integer breaks, and summary counts are shown in small text under each title.
 }

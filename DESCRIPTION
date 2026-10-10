@@ -17,6 +17,7 @@ Imports:
     jsonlite,
     data.table,
     ggplot2,
+    grDevices,
     patchwork,
     Biostrings,
     pwalign,
@@ -27,7 +28,9 @@ Suggests:
     testthat (>= 3.0.0),
     rtracklayer,
     GenomicRanges,
-    IRanges
+    IRanges,
+    rphylopic,
+    png
 biocViews: Software
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.1

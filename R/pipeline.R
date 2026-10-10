@@ -12,10 +12,11 @@
 #' @param hotspot_top_n number of top COSMIC residues treated as hotspots
 #' @param hotspot_window max distance (human aa) for a close match; 0 = same residue
 #' @param hotspot_min_samples minimum COSMIC samples for a residue to count
-#' @param ... passed to [plot_gene_mutations()]
+#' @param ... passed to [plot_gene_mutations()], e.g. `highlight_colour = "red"`,
+#'   `base_size`, `legend_position`, `panel_heights`, `show_pictograms`
 #' @return list: gene_check, species, species_name, assembly, model,
 #'   cosmic_mutations, species_mutations, hotspot_matches (NULL unless
-#'   highlighting), plot
+#'   highlighting), pictogram_credits (PhyloPic attributions to cite), plot
 #' @export
 xsmut_pipeline <- function(gene, mutations, species, assembly = NULL, cosmic,
                            census_path = NULL, human_assembly = c("GRCh38", "GRCh37"),
@@ -50,11 +51,12 @@ xsmut_pipeline <- function(gene, mutations, species, assembly = NULL, cosmic,
                            highlight_hotspots = highlight_hotspots,
                            hotspot_top_n = hotspot_top_n, hotspot_window = hotspot_window,
                            hotspot_min_samples = hotspot_min_samples,
-                           hotspot_matches = matches, ...)
+                           hotspot_matches = matches, gene_info = check,
+                           pictogram_species = sp_name, ...)
 
   list(gene_check = check, species = sp, species_name = sp_name, assembly = asm, model = model,
        cosmic_mutations = cos_mut, species_mutations = sp_mut, hotspot_matches = matches,
-       plot = p)
+       pictogram_credits = attr(p, "pictogram_credits"), plot = p)
 }
 
 #' Launch the Shiny app

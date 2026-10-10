@@ -6,11 +6,12 @@ test_that("parse_aa_pos handles common HGVS forms", {
 })
 
 test_that("alignment map handles gaps on both sides", {
-  # human:  A-CDE F
-  # target: ABCD-EF
-  m <- xsmut:::.aln_map("A-CDEF", "ABCD-EF")
-  # target residues: A B C D E F  -> human 1 NA 2 3 4 5
-  expect_equal(m, c(1L, NA, 2L, 3L, 4L, 5L))
+  # human:  A-CDEF   (gap opposite target B)
+  # target: ABCD-F   (gap opposite human E)
+  m <- xsmut:::.aln_map("A-CDEF", "ABCD-F")
+  # target residues: A B C D F -> human 1 NA 2 3 5
+  expect_equal(m, c(1L, NA, 2L, 3L, 5L))
+  expect_error(xsmut:::.aln_map("A-CDEF", "ABCD-EF"))  # unequal lengths are rejected
 })
 
 test_that("intron compression keeps exons contiguous and monotone", {

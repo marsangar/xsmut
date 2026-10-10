@@ -122,24 +122,35 @@ parse_aa_pos <- function(x) {
 #' @param census_path path to the Cancer Gene Census file (tsv/csv). If NULL and
 #'   `mutations` is given, the check falls back to "has >= 1 COSMIC mutation".
 #' @param mutations optional normalised COSMIC mutation table from [cosmic_load()]
-#' @return data.table: gene, in_census, tier, role, n_cosmic_mutations
+#' @return data.table: gene, in_census, tier, role, n_cosmic_mutations, name,
+#'   tumour_types_somatic, mutation_types, census_supplied
 #' @export
 cosmic_gene_listed <- function(genes, census_path = NULL, mutations = NULL) {
   out <- data.table(gene = genes, in_census = NA, tier = NA_character_,
-                    role = NA_character_, n_cosmic_mutations = NA_integer_)
+                    role = NA_character_, n_cosmic_mutations = NA_integer_,
+                    name = NA_character_, tumour_types_somatic = NA_character_,
+                    mutation_types = NA_character_, census_supplied = !is.null(census_path))
   if (!is.null(census_path)) {
     cg <- fread(census_path)
-    sym_col  <- intersect(c("GENE_SYMBOL", "Gene Symbol"), names(cg))[1]
-    tier_col <- intersect(c("TIER", "Tier"), names(cg))[1]
-    role_col <- intersect(c("ROLE_IN_CANCER", "Role in Cancer"), names(cg))[1]
+    pick <- function(cands) intersect(cands, names(cg))[1]
+    sym_col <- pick(c("GENE_SYMBOL", "Gene Symbol"))
     if (is.na(sym_col)) stop("Census file has no GENE_SYMBOL / 'Gene Symbol' column")
     idx <- match(toupper(genes), toupper(cg[[sym_col]]))
     # compute outside the data.table call to avoid column/variable name clashes
-    tier_val <- if (!is.na(tier_col)) as.character(cg[[tier_col]][idx]) else rep(NA_character_, length(genes))
-    role_val <- if (!is.na(role_col)) as.character(cg[[role_col]][idx]) else rep(NA_character_, length(genes))
+    fields <- list(
+      tier                 = c("TIER", "Tier"),
+      role                 = c("ROLE_IN_CANCER", "Role in Cancer"),
+      name                 = c("NAME", "Name"),
+      tumour_types_somatic = c("TUMOUR_TYPES_SOMATIC", "Tumour Types(Somatic)"),
+      mutation_types       = c("MUTATION_TYPES", "Mutation Types")
+    )
     data.table::set(out, j = "in_census", value = !is.na(idx))
-    data.table::set(out, j = "tier", value = tier_val)
-    data.table::set(out, j = "role", value = role_val)
+    for (f in names(fields)) {
+      col <- pick(fields[[f]])
+      val <- if (!is.na(col)) as.character(cg[[col]][idx]) else rep(NA_character_, length(genes))
+      val[!is.na(val) & !nzchar(trimws(val))] <- NA_character_
+      data.table::set(out, j = f, value = val)
+    }
   }
   if (!is.null(mutations)) {
     n <- mutations[, .N, by = gene]

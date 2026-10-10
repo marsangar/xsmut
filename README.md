@@ -14,7 +14,8 @@ mutation landscape for the same gene.
  └──────────────────────────────────────────────┘
 ```
 
-Use `species_panel = "bottom"` to swap the panels (COSMIC on top).
+Use `species_panel = "bottom"` to swap the panels (COSMIC on top). The species panel is
+labelled with the scientific name and assembly, e.g. *Macaca mulatta (Mmul_10)*.
 
 ## How the species-agnostic mapping works
 
@@ -75,6 +76,8 @@ res$gene_check         # in_census, tier, role, n_cosmic_mutations
 res$model              # human canonical transcript, exons, CDS
 res$cosmic_mutations   # all human COSMIC mutations for TP53
 res$species_mutations  # your mutations + human_aa_pos / human_chrom / human_pos
+res$species_name       # "Macaca mulatta"
+res$hotspot_matches    # NULL unless highlight_hotspots = TRUE (see below)
 res$plot               # patchwork; ggsave("TP53.pdf", res$plot, width = 12, height = 8)
 ```
 
@@ -93,8 +96,24 @@ sp    <- ens_resolve_species("Macaca mulatta")
 model <- get_gene_model("TP53")                                 # human
 cos   <- cosmic_gene_mutations("TP53", cos)
 mm    <- map_mutations_to_human(muts, "TP53", sp)
-plot_gene_mutations(model, cos, mm, species_label = "Macaque (Mmul_10)")
+plot_gene_mutations(model, cos, mm, species_label = "Macaca mulatta (Mmul_10)",
+                    species_panel = "top",       # or "bottom"
+                    intron_linewidth = 1.1,      # thickness of the intron backbone
+                    gene_info = cosmic_gene_listed("TP53", census_path = "data/cosmic/Cosmic_CancerGeneCensus_v103_GRCh38.tsv.gz"))
 ```
+
+The figure header shows the gene name and, when a Census file is given, its role
+(oncogene / TSG / fusion) and somatic tumour types.
+
+Each mutation panel carries a silhouette of its species (human on the COSMIC panel), fetched
+from [PhyloPic](https://www.phylopic.org) via the optional `rphylopic` package
+(`install.packages("rphylopic")`; internet needed on first use per session). Images not
+requiring attribution are preferred; any credits are in `res$pictogram_credits` and should be
+cited when required by the image licence. Turn off with `show_pictograms = FALSE`, or supply
+your own images: `pictograms = list(species = "macaque.png", human = FALSE)`. Each panel has a small-print line with
+mapped/unmapped mutations and samples (species) or distinct mutations, calls and samples
+(COSMIC). Other layout options: `base_size`, `legend_position`, `panel_heights`. For PDFs use
+`ggsave("TP53.pdf", res$plot, width = 12, height = 8, device = cairo_pdf)`.
 
 ## Highlighting matches to COSMIC hotspots
 
@@ -107,7 +126,7 @@ res <- xsmut_pipeline("TP53", muts, "macaque", "Mmul_10", cos,
 res$hotspot_matches   # match_type: "identical change", "same residue", "within N aa"
 ```
 
-Matched user mutations get a gold halo and bold label, the hit COSMIC hotspot is ringed, and a
+Matched user mutations get a gold halo (`highlight_colour = "red"` for slides, or any R colour) and bold label, the hit COSMIC hotspot is ringed, and a
 dashed guide runs through all panels. `cosmic_hotspots()` and `match_cosmic_hotspots()` can be
 used on their own. COSMIC residue numbers follow COSMIC's transcript (usually MANE); user
 residues follow the Ensembl human ortholog protein, so check genes where the two differ.
@@ -118,8 +137,10 @@ residues follow the Ensembl human ortholog protein, so check genes where the two
 xsmut::run_app()
 ```
 
-Upload the COSMIC export, the (optional) census file and your mutation table; enter genes,
-species and assembly; press **Run**. One tab per gene, with plot + both tables, PDF/CSV export.
+Upload the COSMIC export, the (optional) census file and your mutation table (xsmut format or
+dNdScv `annotmuts`); enter genes, species and assembly; choose the panel for your mutations and,
+optionally, hotspot highlighting (top N, ± aa window, min. samples); press **Run**. One tab per
+gene, with plot, hotspot matches and both tables; PDF/CSV export.
 
 ## Input mutation table
 
@@ -132,6 +153,9 @@ species and assembly; press **Run**. One tab per gene, with plot + both tables, 
 | `sample_id`   | no       | counted per unique mutation                                  |
 | `chrom`,`pos` | no       | species genomic coords; used only with a `chain` file        |
 
+dNdScv output (`dndscv()$annotmuts`) is accepted as-is: it is detected by `is_dndscv()` and
+converted by `as_xsmut()` (or read from file with `read_dndscv()`).
+
 ## Repository layout
 
 ```
@@ -139,7 +163,8 @@ R/ensembl.R      Ensembl REST client, species/assembly resolution, orthologs, pr
 R/cosmic.R       COSMIC file normalisation, gene-listed check, per-gene retrieval
 R/gene_model.R   canonical transcript, exon/CDS/UTR model
 R/crossmap.R     species aa → human aa → human genome (+ optional liftOver)
-R/plot.R         gene track + upper/lower lollipop panels (ggplot2 + patchwork)
+R/dndscv.R       dNdScv annotmuts adapter (is_dndscv, as_xsmut, read_dndscv)
+R/plot.R         gene track + species/COSMIC lollipop panels, hotspot highlighting (ggplot2 + patchwork)
 R/hotspots.R     top COSMIC hotspot residues and matching of user mutations
 R/pipeline.R     xsmut_pipeline(), run_app()
 inst/app/app.R   Shiny app

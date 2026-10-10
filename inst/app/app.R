@@ -31,8 +31,11 @@ ui <- fluidPage(
         "input.highlight",
         numericInput("hs_top", "Top N COSMIC hotspot residues", 10, min = 1),
         numericInput("hs_window", "Close match window (± aa; 0 = same residue)", 3, min = 0),
-        numericInput("hs_min", "Min. COSMIC samples per hotspot", 2, min = 1)
+        numericInput("hs_min", "Min. COSMIC samples per hotspot", 2, min = 1),
+        radioButtons("hs_col", "Halo colour", c("Gold" = "gold", "Red (slides)" = "red"), inline = TRUE)
       ),
+      selectInput("legend_pos", "Legend", c("right", "bottom", "none")),
+      checkboxInput("pictos", "Species pictograms (PhyloPic; needs rphylopic + internet)", TRUE),
       actionButton("go", "Run", class = "btn-primary"),
       br(), br(),
       downloadButton("dl_plot", "Download plot (PDF)"),
@@ -76,6 +79,8 @@ server <- function(input, output, session) {
                          highlight_hotspots = isTRUE(input$highlight),
                          hotspot_top_n = input$hs_top, hotspot_window = input$hs_window,
                          hotspot_min_samples = input$hs_min,
+                         highlight_colour = input$hs_col, legend_position = input$legend_pos,
+                         show_pictograms = isTRUE(input$pictos),
                          compress_introns = input$compress, min_label_n = input$min_label),
           error = function(e) list(error = conditionMessage(e)))
       }
@@ -103,7 +108,9 @@ server <- function(input, output, session) {
           div(class = if (n_hits > 0) "alert alert-info" else "alert alert-warning",
               sprintf("%d of your mutations match (±%d aa) the top %d COSMIC hotspot residues.",
                       n_hits, input$hs_window, input$hs_top)),
-        plotOutput(paste0("plot_", g), height = "650px"),
+        plotOutput(paste0("plot_", g), height = "720px"),
+        if (length(r$pictogram_credits))
+          helpText("Silhouettes from PhyloPic: ", paste(r$pictogram_credits, collapse = "; ")),
         if (!is.na(n_hits)) tagList(h4("Matches to COSMIC hotspots"),
                                     DT::dataTableOutput(paste0("tbl_hit_", g))),
         h4("Species mutations mapped to human"),
@@ -136,7 +143,7 @@ server <- function(input, output, session) {
     filename = function() paste0("xsmut_", gsub("[^A-Za-z0-9]", "_", input$genes), ".pdf"),
     content = function(file) {
       res <- results(); ok <- Filter(function(r) is.null(r$error), res)
-      pdf(file, width = 12, height = 8)
+      if (capabilities("cairo")) grDevices::cairo_pdf(file, width = 12, height = 8, onefile = TRUE) else pdf(file, width = 12, height = 8)
       for (r in ok) print(r$plot)
       dev.off()
     })

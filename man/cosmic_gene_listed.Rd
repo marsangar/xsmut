@@ -15,7 +15,8 @@ cosmic_gene_listed(genes, census_path = NULL, mutations = NULL)
 \item{mutations}{optional normalised COSMIC mutation table from \code{\link[=cosmic_load]{cosmic_load()}}}
 }
 \value{
-data.table: gene, in_census, tier, role, n_cosmic_mutations
+data.table: gene, in_census, tier, role, n_cosmic_mutations, name,
+tumour_types_somatic, mutation_types, census_supplied
 }
 \description{
 Check whether a gene is listed in COSMIC (Cancer Gene Census)
