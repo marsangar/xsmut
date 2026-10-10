@@ -5,8 +5,9 @@ Authors@R: person("Your", "Name", email = "you@example.org", role = c("aut", "cr
 Description: Checks genes against the COSMIC Cancer Gene Census, retrieves human
     COSMIC mutations for a gene, maps mutations annotated in any Ensembl species
     (e.g. macaque, Mmul_10) onto human reference coordinates via ortholog protein
-    alignment, and draws a gene-model plot with human COSMIC mutations in an upper
-    panel and the user's species mutations in a lower panel. Includes a Shiny app.
+    alignment, and draws a gene-model plot with the user's species mutations and
+    human COSMIC mutations in opposite panels, optionally highlighting matches to
+    the top COSMIC hotspots. Includes a Shiny app.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -29,4 +30,4 @@ Suggests:
     IRanges
 biocViews: Software
 Config/testthat/edition: 3
-Config/roxygen2/version: 8.1.0
+Config/roxygen2/version: 8.1.1

@@ -1,18 +1,20 @@
 # xsmut — cross-species mutations vs. human COSMIC
 
 `xsmut` takes somatic mutations annotated in **any Ensembl species** (macaque, dog, mouse, …),
-maps them onto **human reference coordinates**, and plots them beneath the human COSMIC
+maps them onto **human reference coordinates**, and plots them against the human COSMIC
 mutation landscape for the same gene.
 
 ```
  ┌──────────────────────────────────────────────┐
- │  Human COSMIC lollipops (n samples)          │   upper panel
+ │  Species lollipops, mapped to human          │   upper panel (default)
  ├──────────────────────────────────────────────┤
  │  ▬▬█████▬▬▬████▬▬▬▬███▬▬  gene model (CDS/UTR)│   shared axis
  ├──────────────────────────────────────────────┤
- │  Species lollipops, mapped to human          │   lower panel
+ │  Human COSMIC lollipops (n samples)          │   lower panel
  └──────────────────────────────────────────────┘
 ```
+
+Use `species_panel = "bottom"` to swap the panels (COSMIC on top).
 
 ## How the species-agnostic mapping works
 
@@ -94,6 +96,22 @@ mm    <- map_mutations_to_human(muts, "TP53", sp)
 plot_gene_mutations(model, cos, mm, species_label = "Macaque (Mmul_10)")
 ```
 
+## Highlighting matches to COSMIC hotspots
+
+```r
+res <- xsmut_pipeline("TP53", muts, "macaque", "Mmul_10", cos,
+                      highlight_hotspots = TRUE,   # off by default
+                      hotspot_top_n = 10,          # top residues by COSMIC sample count
+                      hotspot_window = 3,          # +/- human aa for a "close" match (0 = same residue)
+                      hotspot_min_samples = 2)
+res$hotspot_matches   # match_type: "identical change", "same residue", "within N aa"
+```
+
+Matched user mutations get a gold halo and bold label, the hit COSMIC hotspot is ringed, and a
+dashed guide runs through all panels. `cosmic_hotspots()` and `match_cosmic_hotspots()` can be
+used on their own. COSMIC residue numbers follow COSMIC's transcript (usually MANE); user
+residues follow the Ensembl human ortholog protein, so check genes where the two differ.
+
 ## Shiny app
 
 ```r
@@ -122,6 +140,7 @@ R/cosmic.R       COSMIC file normalisation, gene-listed check, per-gene retrieva
 R/gene_model.R   canonical transcript, exon/CDS/UTR model
 R/crossmap.R     species aa → human aa → human genome (+ optional liftOver)
 R/plot.R         gene track + upper/lower lollipop panels (ggplot2 + patchwork)
+R/hotspots.R     top COSMIC hotspot residues and matching of user mutations
 R/pipeline.R     xsmut_pipeline(), run_app()
 inst/app/app.R   Shiny app
 inst/extdata/    example macaque TP53 table
