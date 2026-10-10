@@ -8,15 +8,18 @@
 #' @param census_path optional Cancer Gene Census file
 #' @param human_assembly "GRCh38" or "GRCh37" (must match your COSMIC download)
 #' @param species_panel "top" (default) or "bottom": where user mutations are drawn
-#' @param highlight_hotspots highlight user mutations at/near top COSMIC hotspots
+#' @param highlight_hotspots if TRUE, `plot` is the highlighted version too.
+#'   The highlighted figure is always available as `plot_hotspots`.
 #' @param hotspot_top_n number of top COSMIC residues treated as hotspots
 #' @param hotspot_window max distance (human aa) for a close match; 0 = same residue
 #' @param hotspot_min_samples minimum COSMIC samples for a residue to count
 #' @param ... passed to [plot_gene_mutations()], e.g. `highlight_colour = "red"`,
 #'   `base_size`, `legend_position`, `panel_heights`, `show_pictograms`
 #' @return list: gene_check, species, species_name, assembly, model,
-#'   cosmic_mutations, species_mutations, hotspot_matches (NULL unless
-#'   highlighting), pictogram_credits (PhyloPic attributions to cite), plot
+#'   cosmic_mutations, species_mutations, hotspot_matches, pictogram_credits
+#'   (PhyloPic attributions to cite), and three figures with identical layout:
+#'   `plot` (mutations), `plot_hotspots` (mutations with COSMIC hotspot matches
+#'   highlighted) and `gene_model_plot` (gene model only; see [plot_gene_model()])
 #' @export
 xsmut_pipeline <- function(gene, mutations, species, assembly = NULL, cosmic,
                            census_path = NULL, human_assembly = c("GRCh38", "GRCh37"),
@@ -39,24 +42,28 @@ xsmut_pipeline <- function(gene, mutations, species, assembly = NULL, cosmic,
   if (is_dndscv(mutations)) mutations <- as_xsmut(mutations)
   sp_mut <- map_mutations_to_human(mutations, gene, sp, human_assembly = human_assembly)
 
-  matches <- if (isTRUE(highlight_hotspots)) {
-    match_cosmic_hotspots(sp_mut, cos_mut, top_n = hotspot_top_n, window = hotspot_window,
-                          min_samples = hotspot_min_samples)
-  } else NULL
+  # hotspot matching is always done; it feeds res$hotspot_matches and res$plot_hotspots
+  matches <- match_cosmic_hotspots(sp_mut, cos_mut, top_n = hotspot_top_n, window = hotspot_window,
+                                   min_samples = hotspot_min_samples)
 
   sp_name <- .species_display_name(sp)          # "Macaca mulatta"
   label <- sprintf("%s (%s)", sp_name, if (!is.null(assembly)) assembly else asm$assembly_name)
-  p <- plot_gene_mutations(model, cos_mut, sp_mut, species_label = label,
-                           species_panel = species_panel,
-                           highlight_hotspots = highlight_hotspots,
-                           hotspot_top_n = hotspot_top_n, hotspot_window = hotspot_window,
-                           hotspot_min_samples = hotspot_min_samples,
-                           hotspot_matches = matches, gene_info = check,
-                           pictogram_species = sp_name, ...)
+  draw <- function(hl) plot_gene_mutations(
+    model, cos_mut, sp_mut, species_label = label, species_panel = species_panel,
+    highlight_hotspots = hl, hotspot_top_n = hotspot_top_n, hotspot_window = hotspot_window,
+    hotspot_min_samples = hotspot_min_samples, hotspot_matches = matches, gene_info = check,
+    pictogram_species = sp_name, ...)
+  p_hs <- draw(TRUE)
+  p    <- if (isTRUE(highlight_hotspots)) p_hs else draw(FALSE)
+  # same figure with only the gene model drawn (identical layout; slide template)
+  gm <- plot_gene_mutations(model, cos_mut, sp_mut, species_label = label,
+                            species_panel = species_panel, gene_info = check,
+                            pictogram_species = sp_name, ..., gene_only = TRUE)
 
   list(gene_check = check, species = sp, species_name = sp_name, assembly = asm, model = model,
        cosmic_mutations = cos_mut, species_mutations = sp_mut, hotspot_matches = matches,
-       pictogram_credits = attr(p, "pictogram_credits"), plot = p)
+       pictogram_credits = attr(p, "pictogram_credits"), plot = p, plot_hotspots = p_hs,
+       gene_model_plot = gm)
 }
 
 #' Launch the Shiny app

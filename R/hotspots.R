@@ -60,8 +60,10 @@ match_cosmic_hotspots <- function(species_mut, cosmic, top_n = 10, window = 3, m
   if (!"aa_change" %in% names(sp)) sp[, aa_change := paste0("p.", aa_pos)]
   if (!"sample_id" %in% names(sp)) sp[, sample_id := NA_character_]
   if (!"consequence" %in% names(sp)) sp[, consequence := NA_character_]
+  if (!"human_aa_change" %in% names(sp)) sp[, human_aa_change := NA_character_]
 
-  empty <- data.table(sample_id = character(), aa_change = character(), consequence = character(),
+  empty <- data.table(sample_id = character(), aa_change = character(), human_aa_change = character(),
+                      consequence = character(),
                       human_aa_pos = integer(), human_pos = integer(), hotspot_rank = integer(),
                       hotspot_aa_pos = integer(), hotspot_change = character(),
                       hotspot_n_samples = integer(), distance_aa = integer(), match_type = character())
@@ -73,7 +75,7 @@ match_cosmic_hotspots <- function(species_mut, cosmic, top_n = 10, window = 3, m
   pairs <- pairs[distance_aa <= window][order(.row, distance_aa, .hs)][, .SD[1], by = .row]
   if (!nrow(pairs)) { attr(empty, "hotspots") <- hs; return(empty) }
 
-  out <- sp[pairs$.row, .(sample_id, aa_change, consequence, human_aa_pos, human_pos)]
+  out <- sp[pairs$.row, .(sample_id, aa_change, human_aa_change, consequence, human_aa_pos, human_pos)]
   h <- hs[pairs$.hs]
   out[, `:=`(hotspot_rank = h$rank, hotspot_aa_pos = h$aa_pos, hotspot_change = h$top_change,
              hotspot_n_samples = h$n_samples, distance_aa = as.integer(pairs$distance_aa))]

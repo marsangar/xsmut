@@ -37,7 +37,8 @@ xsmut_pipeline(
 
 \item{species_panel}{"top" (default) or "bottom": where user mutations are drawn}
 
-\item{highlight_hotspots}{highlight user mutations at/near top COSMIC hotspots}
+\item{highlight_hotspots}{if TRUE, \code{plot} is the highlighted version too.
+The highlighted figure is always available as \code{plot_hotspots}.}
 
 \item{hotspot_top_n}{number of top COSMIC residues treated as hotspots}
 
@@ -50,8 +51,10 @@ xsmut_pipeline(
 }
 \value{
 list: gene_check, species, species_name, assembly, model,
-cosmic_mutations, species_mutations, hotspot_matches (NULL unless
-highlighting), pictogram_credits (PhyloPic attributions to cite), plot
+cosmic_mutations, species_mutations, hotspot_matches, pictogram_credits
+(PhyloPic attributions to cite), and three figures with identical layout:
+\code{plot} (mutations), \code{plot_hotspots} (mutations with COSMIC hotspot matches
+highlighted) and \code{gene_model_plot} (gene model only; see \code{\link[=plot_gene_model]{plot_gene_model()}})
 }
 \description{
 Run the full cross-species comparison for one gene

@@ -83,7 +83,7 @@ NULL
 .fmt_n <- function(x) format(x, big.mark = ",", trim = TRUE)
 
 # Small one-paragraph COSMIC summary for a gene from cosmic_gene_listed()
-.gene_info_text <- function(info, max_tumour_types = 8, width = 150) {
+.gene_info_text <- function(info, max_tumour_types = 8, width = 100) {
   if (is.null(info) || !nrow(info)) return(NULL)
   info <- as.data.table(info)[1]
   get <- function(col) if (col %in% names(info)) as.character(info[[col]]) else NA_character_
@@ -118,12 +118,14 @@ NULL
 }
 
 .lollipop <- function(dt, tf, title, subtitle = NULL, flip = FALSE, min_label_n = 3,
-                      hl_x = NULL, hl_col = "#E0A800", base_size = 11,
-                      title_face = "bold", strip_p = TRUE, label_gap = 0.9,
-                      hl_strong = TRUE) {
+                      hl_x = NULL, hl_col = "#E0A800", base_size = 14,
+                      title_face = "bold", strip_p = TRUE, label_gap = 0.5,
+                      hl_strong = TRUE, headroom = 0.45, hl_label_box = TRUE) {
   # dt: pos, aa_change, consequence, n, [hl (logical)]
   dt <- as.data.table(dt)
-  small <- base_size * 0.75
+  small <- base_size * 0.85
+  max_size <- 5                                            # largest point diameter (mm)
+  lab_size <- base_size * 0.75 / .pt                       # label font size in mm
   # panel titles: top panel -> above; flipped (bottom) panel -> at its base.
   title_layer <- if (flip) {
     list(labs(title = NULL, subtitle = NULL, x = title, caption = subtitle),
@@ -152,13 +154,15 @@ NULL
   dt[, x := tf(pos)]
   dt[, ymax := if (flip) -n else n]
   # display label: drop the HGVS "p." prefix (saves space)
-  dt[, label := if (strip_p) sub("^p\\.", "", as.character(aa_change)) else as.character(aa_change)]
+  if (!"disp" %in% names(dt)) dt[, disp := aa_change]
+  dt[is.na(disp), disp := aa_change]
+  dt[, label := if (strip_p) sub("^p\\.", "", as.character(disp)) else as.character(disp)]
 
   # label offset scaled to each point's radius (scale_size_area: size = max_size * sqrt(n / max n)),
   # plus the halo, plus a fixed gap, expressed in label heights (vjust units)
-  max_size <- 5
-  lab_size <- base_size * 0.62 / .pt                       # font size in mm
-  r_mm <- max_size * sqrt(dt$n / max(dt$n)) / 2 + ifelse(dt$hl, if (hl_strong) 1.8 else 0.9, 0.15)
+  # highlighted labels get only a small extra lift (they may touch the translucent
+  # glow), so they stay level with their neighbours and inside the panel headroom
+  r_mm <- max_size * sqrt(dt$n / max(dt$n)) / 2 + ifelse(dt$hl, 0.5, 0.15)
   off <- r_mm / (0.75 * lab_size) + label_gap
   dt[, vj := if (flip) 1 + off else -off]
 
@@ -175,17 +179,17 @@ NULL
         geom_segment(data = lab_hl, aes(x = x, xend = x, y = 0, yend = ymax),
                      colour = hl_col, linewidth = 0.9) +
         geom_point(data = lab_hl, aes(x = x, y = ymax, size = n), shape = 21,
-                   fill = NA, colour = grDevices::adjustcolor(hl_col, alpha.f = 0.35), stroke = 5)
+                   fill = NA, colour = grDevices::adjustcolor(hl_col, alpha.f = 0.35), stroke = 3.6)
     }
     p <- p + geom_point(data = lab_hl, aes(x = x, y = ymax, size = n), shape = 21,
-                        fill = NA, colour = hl_col, stroke = if (hl_strong) 2.6 else 2.4)
+                        fill = NA, colour = hl_col, stroke = if (hl_strong) 2.2 else 2)
   }
   p <- p +
     geom_point(aes(x = x, y = ymax, colour = class, size = n), alpha = 0.9) +
     scale_colour_manual(values = .pal, drop = TRUE, name = "Consequence") +
     scale_size_area(max_size = max_size, guide = "none") +
     scale_y_continuous(breaks = .int_breaks, labels = function(v) .fmt_n(abs(v)),
-                       expand = if (flip) expansion(mult = c(0.32, 0)) else expansion(mult = c(0, 0.32))) +
+                       expand = if (flip) expansion(mult = c(headroom, 0)) else expansion(mult = c(0, headroom))) +
     labs(y = "Samples") +
     theme_classic(base_size = base_size) +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.line.x = element_blank(),
@@ -202,40 +206,106 @@ NULL
                        size = lab_size, colour = "grey15", check_overlap = TRUE)
   }
   if (nrow(lab_hl)) {
-    p <- p + geom_text(data = lab_hl, aes(x = x, y = ymax, label = label, vjust = vj),
-                       size = lab_size * if (hl_strong) 1.2 else 1.05, fontface = "bold",
-                       colour = .darken(hl_col, if (hl_strong) 0.7 else 0.8))
+    hl_txt <- .darken(hl_col, if (hl_strong) 0.65 else 0.8)
+    if (hl_label_box) {
+      # last layer, so it sits on top of points, stems and other labels; white box
+      # with a thin border in the highlight colour keeps it readable when crowded
+      p <- p + geom_label(data = lab_hl, aes(x = x, y = ymax, label = label, vjust = vj),
+                          size = lab_size * 1.05, fontface = "plain", colour = hl_txt,
+                          fill = "white", label.padding = grid::unit(0.12, "lines"),
+                          label.r = grid::unit(0.08, "lines"))
+    } else {
+      p <- p + geom_text(data = lab_hl, aes(x = x, y = ymax, label = label, vjust = vj),
+                         size = lab_size * 1.05, fontface = "plain", colour = hl_txt)
+    }
   }
   p
 }
 
 .gene_track <- function(model, tf, show_exon_numbers = TRUE, intron_linewidth = 1.1,
-                        hl_x = NULL, hl_col = "#E0A800", base_size = 11, hl_strong = TRUE) {
+                        hl_x = NULL, hl_col = "#E0A800", base_size = 14, hl_strong = TRUE,
+                        show_tss = TRUE, show_direction = TRUE, compressed = TRUE) {
   ex <- as.data.table(model$exons)
   ex[, `:=`(px = tf(start), pxend = tf(end))]
   ex[, h := ifelse(feature == "CDS", 0.42, 0.22)]
+  ex[, feature_lab := factor(ifelse(feature == "CDS", "Coding exon", "UTR"),
+                             levels = c("Coding exon", "UTR"))]
   merged <- ex[, .(px = min(px), pxend = max(pxend), start = min(start), end = max(end)), by = exon_rank][order(px)]
-  strand_lab <- if (model$gene$strand == 1) "forward (+) strand" else "reverse (-) strand"
-  small <- base_size * 0.62
-  locus <- sprintf("%s  \u00b7  chr%s:%s-%s  \u00b7  %s  \u00b7  %s  \u00b7  %s",
-                   model$gene$symbol, model$gene$chrom, .fmt_n(model$gene$start),
+  # exon-number anchor: centre of the coding (dark blue) part when the exon has
+  # one, otherwise of the whole (UTR-only) exon
+  lab_x <- ex[, .(lx = if (any(feature == "CDS")) (min(px[feature == "CDS"]) + max(pxend[feature == "CDS"])) / 2
+                       else (min(px) + max(pxend)) / 2), by = exon_rank]
+  merged <- merged[lab_x, on = "exon_rank"]
+  plus <- model$gene$strand == 1
+  strand_lab <- if (plus) "+ strand" else "- strand"
+  small <- base_size * 0.6
+  locus <- sprintf("chr%s:%s-%s  \u00b7  %s  \u00b7  %s  \u00b7  %s",
+                   model$gene$chrom, .fmt_n(model$gene$start),
                    .fmt_n(model$gene$end), model$transcript$id, model$gene$assembly, strand_lab)
-  p <- ggplot() + .hl_guides(tf(hl_x), hl_col, hl_strong) +
-    annotate("segment", x = min(merged$px), xend = max(merged$pxend), y = 0, yend = 0,
-             colour = "grey35", linewidth = intron_linewidth, lineend = "butt") +
-    geom_rect(data = ex, aes(xmin = px, xmax = pxend, ymin = -h, ymax = h, fill = feature), colour = NA) +
-    scale_fill_manual(values = c(CDS = "#1F3A5F", UTR = "#9DB4D0"), name = NULL) +
-    annotate("text", x = -Inf, y = 0.78, label = locus, hjust = -0.01, vjust = 1,
-             size = small / .pt, colour = "grey30") +
+  span <- max(merged$pxend) - min(merged$px)
+
+  # introns: backbone pieces between consecutive exons (own legend key)
+  introns <- if (nrow(merged) > 1) data.table(x = merged$pxend[-nrow(merged)], xend = merged$px[-1]) else
+    data.table(x = numeric(), xend = numeric())
+  intron_lab <- if (compressed) "Intron (not to scale)" else "Intron"
+  introns[, what := intron_lab]
+
+  p <- ggplot() + .hl_guides(tf(hl_x), hl_col, hl_strong)
+  if (nrow(introns)) {
+    p <- p + geom_segment(data = introns, aes(x = x, xend = xend, y = 0, yend = 0, colour = what),
+                          linewidth = intron_linewidth, lineend = "butt") +
+      scale_colour_manual(values = structure("grey35", names = intron_lab), name = NULL)
+    if (show_direction) {
+      # one open chevron per intron, pointing in the direction of transcription
+      chev <- introns[, .(mid = (x + xend) / 2, w = xend - x)][w > 0]
+      d <- pmin(chev$w * 0.18, span * 0.006)
+      p <- p + annotate("segment", x = chev$mid - (if (plus) d else -d), xend = chev$mid + (if (plus) d else -d),
+                        y = 0, yend = 0, colour = "grey35", linewidth = intron_linewidth * 0.6,
+                        arrow = grid::arrow(length = grid::unit(1.3, "mm"), type = "open", angle = 35))
+    }
+  }
+  p <- p +
+    geom_rect(data = ex, aes(xmin = px, xmax = pxend, ymin = -h, ymax = h, fill = feature_lab), colour = NA) +
+    scale_fill_manual(values = c("Coding exon" = "#1F3A5F", UTR = "#9DB4D0"), name = NULL, drop = TRUE)
+
+  # TSS: bent arrow at the transcript start, pointing in the direction of transcription
+  if (show_tss) {
+    x0 <- if (plus) min(merged$px) else max(merged$pxend)
+    len <- span * 0.035 * (if (plus) 1 else -1)
+    p <- p +
+      annotate("segment", x = x0, xend = x0, y = 0.42, yend = 0.9, colour = "grey15", linewidth = 0.45) +
+      annotate("segment", x = x0, xend = x0 + len, y = 0.9, yend = 0.9, colour = "grey15", linewidth = 0.45,
+               arrow = grid::arrow(length = grid::unit(1.4, "mm"), type = "closed", angle = 25)) +
+      annotate("text", x = x0 + len * 1.25, y = 0.9, label = "TSS", hjust = if (plus) 0 else 1,
+               size = small / .pt, colour = "grey15")
+  }
+  # locus text on the side opposite the TSS so they never collide
+  p <- p +
+    annotate("text", x = if (plus) Inf else -Inf, y = Inf, label = locus,
+             hjust = if (plus) 1.01 else -0.01, vjust = 1.1, size = small / .pt, colour = "grey30") +
     labs(x = NULL, y = NULL) +
+    guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)) +
     theme_void(base_size = base_size) +
-    theme(legend.position = "right", legend.text = element_text(size = base_size * 0.75),
+    theme(legend.position = "right", legend.text = element_text(size = base_size * 0.85),
           plot.margin = margin(0, 5.5, 0, 5.5))
   if (show_exon_numbers) {
-    p <- p + geom_text(data = merged, aes(x = (px + pxend) / 2, y = -0.66, label = exon_rank),
-                       size = small / .pt, colour = "grey40")
+    # just under the exon boxes, leaving a clear gap above the lower panel
+    p <- p + geom_text(data = merged, aes(x = lx, y = -0.56, label = exon_rank),
+                       vjust = 1, size = small / .pt, colour = "grey40", check_overlap = TRUE)
   }
   p
+}
+
+# Make a panel invisible while keeping every element's space (titles, axes,
+# legend keys), so a gene-model-only figure has exactly the full figure's layout.
+.ghost <- function(p) {
+  for (i in seq_along(p$layers)) p$layers[[i]]$aes_params$alpha <- 0
+  tr <- element_text(colour = "transparent")
+  tl <- element_line(colour = "transparent")
+  p + theme(plot.title = tr, plot.subtitle = tr, plot.caption = tr, axis.title.x = tr,
+            axis.title.y = tr, axis.text.y = tr, axis.line.y = tl, axis.ticks.y = tl,
+            legend.title = tr, legend.text = tr) +
+    guides(colour = guide_legend(override.aes = list(alpha = 0)))
 }
 
 #' Plot user (species) mutations and human COSMIC mutations on a human gene model
@@ -270,7 +340,9 @@ NULL
 #' @param base_size base font size (pt); small print is 75% of it
 #' @param italic_species draw the species name in italics
 #' @param max_tumour_types truncate the COSMIC somatic tumour-type list
-#' @param panel_heights relative heights c(upper, gene model, lower); default
+#' @param gene_track_height height of the gene-model strip in mm (default scales
+#'   with `base_size`, ~15 mm at 14 pt), fixed regardless of figure size
+#' @param panel_heights relative heights c(upper, lower) of the mutation panels; default
 #'   gives COSMIC more room than the species panel
 #' @param legend_position "right", "bottom" or "none"
 #' @param show_pictograms draw a species silhouette in the outer right corner
@@ -284,8 +356,24 @@ NULL
 #' @param strip_p drop the "p." prefix from protein-change labels in the plot
 #' @param label_gap extra space between a lollipop head and its label, in label
 #'   heights (the offset also grows with point size and halo)
+#' @param highlight_label_box draw labels of highlighted mutations on top of
+#'   everything else, in a white box with a border in the highlight colour
+#' @param headroom empty space above the tallest lollipop, as a fraction of the
+#'   sample-axis range, that holds its label inside the panel. Increase it (e.g.
+#'   0.8) for short figures such as 16:9 slides if top labels are cut; decrease it
+#'   to give the lollipops more height
+#' @param aa_numbering label user mutations in "species" residue numbering
+#'   (default) or "human" numbering with the human reference residue (column
+#'   `human_aa_change` from [map_mutations_to_human()]; falls back to the
+#'   species label where no human equivalent exists)
+#' @param gene_only draw only the gene model and header, leaving the two
+#'   mutation panels blank but with exactly the same size and position as in
+#'   the full figure (a template to stack the mutation plots on in slides);
+#'   see [plot_gene_model()]
+#' @param show_tss mark the transcription start site with a bent arrow
+#' @param show_direction draw chevrons along introns in the direction of transcription
 #' @param highlight_style "strong" (default: glow, thick ring, coloured stem,
-#'   shaded guide band, larger label; good for slides) or "subtle"
+#'   shaded guide band, darker label; good for slides) or "subtle"
 #' @return a patchwork object (ggplot); use `print()` or `ggsave()`. If
 #'   highlighting is on, the match table is in `attr(p, "hotspot_matches")`.
 #' @export
@@ -295,16 +383,20 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
                                 highlight_hotspots = FALSE, hotspot_top_n = 10,
                                 hotspot_window = 3, hotspot_min_samples = 2,
                                 hotspot_matches = NULL, highlight_colour = "gold",
-                                intron_linewidth = 1.1, base_size = 11, italic_species = TRUE,
+                                intron_linewidth = 1.1, base_size = 14, italic_species = TRUE,
                                 max_tumour_types = 8, panel_heights = NULL,
+                                gene_track_height = NULL,
                                 legend_position = "right", show_pictograms = TRUE,
                                 pictograms = list(), pictogram_species = NULL,
-                                pictogram_size = 0.14, strip_p = TRUE, label_gap = 0.9,
-                                highlight_style = c("strong", "subtle")) {
+                                pictogram_size = 0.14, strip_p = TRUE, label_gap = 0.5, headroom = 0.45,
+                                highlight_label_box = TRUE,
+                                highlight_style = c("strong", "subtle"),
+                                aa_numbering = c("species", "human"), gene_only = FALSE,
+                                show_tss = TRUE, show_direction = TRUE) {
   species_panel <- match.arg(species_panel)
   hl_strong <- match.arg(highlight_style) == "strong"
   hl_col <- .resolve_colour(highlight_colour)
-  small <- base_size * 0.75
+  small <- base_size * 0.85
   tr <- .make_transform(model$exons, compress_introns)
   tf <- tr$f
 
@@ -316,11 +408,16 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
   sp <- sp_all[!is.na(human_pos)]
   if (!"aa_change" %in% names(sp)) sp[, aa_change := paste0("p.", aa_pos)]
   if (!"consequence" %in% names(sp)) sp[, consequence := NA_character_]
-  sp_agg <- sp[, .(n = .N), by = .(pos = human_pos, aa_change, consequence)]
+  aa_human <- match.arg(aa_numbering) == "human"
+  sp[, disp := if (aa_human && "human_aa_change" %in% names(sp))
+                 ifelse(is.na(human_aa_change), aa_change, human_aa_change) else aa_change]
+  sp_agg <- sp[, .(n = .N), by = .(pos = human_pos, aa_change, disp, consequence)]
 
   # --- hotspot matching ------------------------------------------------------
-  hl_x <- NULL; hs_caption <- NULL
-  if (isTRUE(highlight_hotspots)) {
+  # a caption line is always reserved (blank when not highlighting) so the panel
+  # geometry is identical with and without highlighting
+  hl_x <- NULL; hs_caption <- " "
+  if (isTRUE(highlight_hotspots) && !isTRUE(gene_only)) {
     if (is.null(hotspot_matches)) {
       hotspot_matches <- match_cosmic_hotspots(species_mut, cosmic, top_n = hotspot_top_n,
                                                window = hotspot_window,
@@ -335,7 +432,7 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
       hl_x <- unique(m$human_pos)
     }
     hs_caption <- sprintf(
-      "Highlighted: %d mutation(s) within \u00b1%d aa of the top %d COSMIC hotspot residues (min. %d samples each).",
+      "Highlighted: %d match(es) within \u00b1%d aa of the top %d COSMIC hotspot residues (min. %d samples)",
       nrow(m), hotspot_window, hotspot_top_n, hotspot_min_samples)
   }
 
@@ -348,16 +445,16 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
   }
   n_unmapped <- sum(is.na(sp_all$human_pos))
   ns_sp <- n_samples(sp_all)
+  # one short small-print line per panel
   sp_sub <- paste(c(
     sp_asm,
-    sprintf("%s mutations mapped to human%s", .fmt_n(nrow(sp)),
-            if (n_unmapped) sprintf(" (%s unmapped)", .fmt_n(n_unmapped)) else ""),
+    sprintf("%s mapped", .fmt_n(nrow(sp))),
+    if (n_unmapped > 0) sprintf("%s unmapped", .fmt_n(n_unmapped)),
     if (!is.na(ns_sp)) sprintf("%s samples", .fmt_n(ns_sp))
   ), collapse = "  \u00b7  ")
   ns_cs <- n_samples(cs)
   cs_sub <- paste(c(
-    sprintf("%s distinct mutations", .fmt_n(nrow(cs_agg))),
-    sprintf("%s mutation calls", .fmt_n(nrow(cs))),
+    sprintf("%s mutations", .fmt_n(nrow(cs_agg))),
     if (!is.na(ns_cs)) sprintf("%s samples", .fmt_n(ns_cs))
   ), collapse = "  \u00b7  ")
   cs_title <- sprintf("Human COSMIC (%s)", model$gene$assembly)
@@ -365,7 +462,7 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
   # --- pictograms (species silhouette on its panel, human on COSMIC) ----------
   sp_top <- species_panel == "top"
   pic_sp <- pic_hs <- NULL
-  if (isTRUE(show_pictograms)) {
+  if (isTRUE(show_pictograms) && !isTRUE(gene_only)) {
     pic_sp <- .resolve_pictogram(pictograms$species,
                                  name = if (is.null(pictogram_species)) sp_name else pictogram_species)
     pic_hs <- .resolve_pictogram(pictograms$human, name = "Homo sapiens")
@@ -377,34 +474,49 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
   p_sp <- .lollipop(sp_agg, tf, sp_name, sp_sub, flip = !sp_top, min_label_n = 1,
                     hl_x = hl_x, hl_col = hl_col, base_size = base_size,
                     title_face = if (italic_species) "bold.italic" else "bold",
-                    strip_p = strip_p, label_gap = label_gap,
+                    strip_p = strip_p, label_gap = label_gap, headroom = headroom,
+                    hl_label_box = highlight_label_box,
                     hl_strong = hl_strong)
   p_cs <- .lollipop(cs_agg, tf, cs_title, cs_sub, flip = sp_top, min_label_n = min_label_n,
                     hl_x = hl_x, hl_col = hl_col, base_size = base_size,
-                    strip_p = strip_p, label_gap = label_gap,
+                    strip_p = strip_p, label_gap = label_gap, headroom = headroom,
+                    hl_label_box = highlight_label_box,
                     hl_strong = hl_strong)
   mid <- .gene_track(model, tf, intron_linewidth = intron_linewidth,
+                     show_tss = show_tss, show_direction = show_direction, compressed = compress_introns,
                      hl_x = hl_x, hl_col = hl_col, base_size = base_size, hl_strong = hl_strong)
 
   xr <- range(c(tf(model$exons$start), tf(model$exons$end), tf(cs_agg$pos), tf(sp_agg$pos)), na.rm = TRUE)
   pad <- diff(xr) * 0.02
-  lock <- function(p) p + coord_cartesian(xlim = xr + c(-pad, pad), clip = "off")
+  # identical x mapping in all three panels: same limits, no extra x expansion
+  # (the padding is already in xlim), so guides/exons/lollipops line up exactly
+  lock <- function(p) p + scale_x_continuous(expand = c(0, 0)) +
+    coord_cartesian(xlim = xr + c(-pad, pad), clip = "off")
   p_sp <- lock(p_sp); p_cs <- lock(p_cs)
 
   # pictogram in the outer right corner of each mutation panel
+  # gene-model-only figure: keep the mutation panels' space but draw nothing in them
+  if (isTRUE(gene_only)) { p_sp <- .ghost(p_sp); p_cs <- .ghost(p_cs) }
   p_sp <- .add_pictogram(p_sp, pic_sp, flip = !sp_top, size = pictogram_size)
   p_cs <- .add_pictogram(p_cs, pic_hs, flip = sp_top, size = pictogram_size)
-  mid <- mid + coord_cartesian(xlim = xr + c(-pad, pad), ylim = c(-0.8, 0.8), clip = "off")
+  mid <- mid + scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0)) +
+    coord_cartesian(xlim = xr + c(-pad, pad), ylim = c(-1.55, 1.25), clip = "off")
 
   panels <- if (sp_top) list(p_sp, mid, p_cs) else list(p_cs, mid, p_sp)
-  if (is.null(panel_heights)) panel_heights <- if (sp_top) c(3, 0.8, 4) else c(4, 0.8, 3)
+  if (is.null(panel_heights)) panel_heights <- if (sp_top) c(3, 4) else c(4, 3)
+  if (length(panel_heights) == 3) panel_heights <- panel_heights[c(1, 3)]   # old c(upper, mid, lower)
+  # the gene model gets an absolute height so its labels never collide with the exons
+  # ylim -1.55..1.25 with CDS +/-0.42: locus text on top, exon numbers right under
+  # the exons, and a ~2 mm empty band before the lower panel's lollipop origins
+  track_mm <- if (is.null(gene_track_height)) 5.2 * base_size * 0.6 / .pt else gene_track_height
+  layout_heights <- grid::unit(c(panel_heights[1], track_mm, panel_heights[2]), c("null", "mm", "null"))
 
   # --- header: gene, COSMIC role / tier / tumour types ------------------------
   gname <- if (!is.null(gene_info) && "name" %in% names(gene_info) && !is.na(gene_info$name[1]) &&
                nzchar(gene_info$name[1])) sprintf("%s: %s", model$gene$symbol, gene_info$name[1]) else model$gene$symbol
   info_txt <- .gene_info_text(gene_info, max_tumour_types = max_tumour_types)
 
-  out <- patchwork::wrap_plots(panels, ncol = 1, heights = panel_heights) +
+  out <- patchwork::wrap_plots(panels, ncol = 1, heights = layout_heights) +
     patchwork::plot_layout(guides = "collect") +
     patchwork::plot_annotation(
       title = gname, subtitle = info_txt, caption = hs_caption,
@@ -415,4 +527,21 @@ plot_gene_mutations <- function(model, cosmic, species_mut, species_label = "Spe
   attr(out, "hotspot_matches") <- hotspot_matches
   attr(out, "pictogram_credits") <- unique(credits)
   out
+}
+
+#' Plot only the gene model (template for slides)
+#'
+#' Same figure as [plot_gene_mutations()] with `gene_only = TRUE`: header (gene
+#' name, COSMIC role, tumour types), gene model with exons, UTRs, introns, TSS
+#' and transcription direction, and the legend - while the two mutation panels
+#' are left blank at exactly the same size and position. Pass the same inputs
+#' (and size in `ggsave()`) as for the full plot and the two images overlay
+#' pixel-for-pixel.
+#'
+#' @inheritParams plot_gene_mutations
+#' @param ... further arguments for [plot_gene_mutations()]
+#' @return a patchwork object
+#' @export
+plot_gene_model <- function(model, cosmic, species_mut, ...) {
+  plot_gene_mutations(model, cosmic, species_mut, ..., gene_only = TRUE)
 }

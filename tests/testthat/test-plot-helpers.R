@@ -23,3 +23,14 @@ test_that("COSMIC gene header text", {
                "Not in COSMIC")
   expect_null(xsmut:::.gene_info_text(data.table::data.table(in_census = TRUE, census_supplied = FALSE)))
 })
+
+test_that("species HGVS changes are rewritten in human numbering", {
+  # species residue k -> human residue k + 1 (one extra residue at the human N-terminus)
+  t2h <- 1:10 + 1L
+  hseq <- "MPYRSTEKAQW"          # human residues 1..11
+  out <- xsmut:::.to_human_hgvs(c("p.Y2C", "p.2fs", "p.R3_S4del", "p.Q9*", NA, "p.Arg3His"),
+                                aa_pos = c(2L, 2L, 3L, 9L, 5L, 3L), t2h = t2h, human_seq = hseq)
+  expect_equal(out, c("p.Y3C", "p.Y3fs", "p.R4_S5del", "p.Q10*", "p.T6", NA))
+  # residue aligned to a human gap -> NA
+  expect_true(is.na(xsmut:::.to_human_hgvs("p.A2V", 2L, c(1L, NA, 2L), "MA")))
+})

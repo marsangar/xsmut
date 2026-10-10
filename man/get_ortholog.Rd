@@ -4,7 +4,12 @@
 \alias{get_ortholog}
 \title{Find the ortholog of a human gene in another species}
 \usage{
-get_ortholog(gene, target_species, host = ens_host())
+get_ortholog(
+  gene,
+  target_species,
+  host = ens_host(),
+  species_protein_id = NULL
+)
 }
 \arguments{
 \item{gene}{human gene symbol}
@@ -12,10 +17,19 @@ get_ortholog(gene, target_species, host = ens_host())
 \item{target_species}{Ensembl production name}
 
 \item{host}{Ensembl REST host}
+
+\item{species_protein_id}{optional species protein ID used by the fallback}
 }
 \value{
-list with \code{human} (id, protein_id) and \code{target} (id, protein_id, perc_id)
+list with \code{human} (id, protein_id, seq) and \code{target} (id,
+protein_id, seq, perc_id, species, type). \code{seq} is NULL and \code{type} is
+"fallback (Compara unavailable)" when the fallback was used.
 }
 \description{
-Find the ortholog of a human gene in another species
+Uses Ensembl Compara (\verb{/homology}). If that service fails (it is sometimes
+down or returns HTTP 500 while the rest of Ensembl works), falls back to
+resolving the two proteins directly: the human canonical protein, and the
+species protein given in \code{species_protein_id} (e.g. dNdScv \code{pid}) or the
+canonical protein of the same-symbol species gene. The pair is then aligned
+locally (pwalign) by the caller.
 }

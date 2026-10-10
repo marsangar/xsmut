@@ -15,7 +15,8 @@ ens_host <- function(human_assembly = c("GRCh38", "GRCh37")) {
   req <- httr2::req_url_path_append(req, path)
   req <- httr2::req_headers(req, Accept = "application/json")
   if (length(query)) req <- httr2::req_url_query(req, !!!query)
-  req <- httr2::req_retry(req, max_tries = 4, backoff = ~ 2)
+  req <- httr2::req_retry(req, max_tries = 4, backoff = ~ 2,
+                          is_transient = function(resp) httr2::resp_status(resp) %in% c(429, 500, 502, 503, 504))
   req <- httr2::req_user_agent(req, "xsmut (https://github.com/your-org/xsmut)")
   resp <- httr2::req_perform(req)
   jsonlite::fromJSON(httr2::resp_body_string(resp), simplifyVector = FALSE)
@@ -97,15 +98,32 @@ ens_lookup_id <- function(id, host = ens_host(), expand = TRUE) {
 
 #' Find the ortholog of a human gene in another species
 #'
+#' Uses Ensembl Compara (`/homology`). If that service fails (it is sometimes
+#' down or returns HTTP 500 while the rest of Ensembl works), falls back to
+#' resolving the two proteins directly: the human canonical protein, and the
+#' species protein given in `species_protein_id` (e.g. dNdScv `pid`) or the
+#' canonical protein of the same-symbol species gene. The pair is then aligned
+#' locally (pwalign) by the caller.
+#'
 #' @param gene human gene symbol
 #' @param target_species Ensembl production name
 #' @param host Ensembl REST host
-#' @return list with `human` (id, protein_id) and `target` (id, protein_id, perc_id)
+#' @param species_protein_id optional species protein ID used by the fallback
+#' @return list with `human` (id, protein_id, seq) and `target` (id,
+#'   protein_id, seq, perc_id, species, type). `seq` is NULL and `type` is
+#'   "fallback (Compara unavailable)" when the fallback was used.
 #' @export
-get_ortholog <- function(gene, target_species, host = ens_host()) {
-  res <- ens_get(paste0("homology/symbol/human/", gene),
-                 query = list(target_species = target_species, type = "orthologues",
-                              sequence = "protein"), host = host)
+get_ortholog <- function(gene, target_species, host = ens_host(), species_protein_id = NULL) {
+  res <- tryCatch(
+    ens_get(paste0("homology/symbol/human/", gene),
+            query = list(target_species = target_species, type = "orthologues",
+                         sequence = "protein"), host = host),
+    error = function(e) e)
+  if (inherits(res, "error")) {
+    warning("Ensembl Compara homology request failed for ", gene, " (", conditionMessage(res),
+            "); falling back to direct protein lookup + local alignment.", call. = FALSE)
+    return(.ortholog_fallback(gene, target_species, host, species_protein_id))
+  }
   homs <- res$data[[1]]$homologies
   if (!length(homs)) stop("No Ensembl ortholog of ", gene, " found in ", target_species)
   # prefer one2one; else highest %id
@@ -119,6 +137,46 @@ get_ortholog <- function(gene, target_species, host = ens_host()) {
     target = list(id = h$target$id, protein_id = h$target$protein_id,
                   seq = h$target$align_seq, perc_id = h$target$perc_id,
                   species = h$target$species, type = h$type)
+  )
+}
+
+# canonical translation of a gene looked up by symbol: list(gene_id, protein_id) or NULL
+.canonical_protein <- function(species, symbol, host) {
+  g <- tryCatch(ens_get(paste0("lookup/symbol/", species, "/", symbol),
+                        query = list(expand = 1), host = host),
+                error = function(e) NULL)
+  if (is.null(g) || is.null(g$Transcript)) return(NULL)
+  canon <- sub("\\..*$", "", if (is.null(g$canonical_transcript)) "" else g$canonical_transcript)
+  tr <- Filter(function(t) !is.null(t$Translation), g$Transcript)
+  if (!length(tr)) return(NULL)
+  pick <- Filter(function(t) identical(t$id, canon) || isTRUE(t$is_canonical == 1), tr)
+  t <- if (length(pick)) pick[[1]] else tr[[which.max(vapply(tr, function(t) t$Translation$length %||% 0, 0))]]
+  list(gene_id = g$id, protein_id = t$Translation$id)
+}
+
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+.ortholog_fallback <- function(gene, target_species, host, species_protein_id = NULL) {
+  hum <- .canonical_protein("homo_sapiens", gene, host)
+  if (is.null(hum)) stop("Ensembl Compara is unavailable and the human gene ", gene,
+                         " could not be resolved; try again later.")
+  tgt_pid <- species_protein_id[!is.na(species_protein_id) & nzchar(species_protein_id)]
+  tgt_pid <- if (length(tgt_pid)) names(sort(table(tgt_pid), decreasing = TRUE))[1] else NULL
+  tgt_gene <- NA_character_
+  if (is.null(tgt_pid)) {
+    for (sym in unique(c(gene, tools::toTitleCase(tolower(gene)), tolower(gene)))) {
+      tg <- .canonical_protein(target_species, sym, host)
+      if (!is.null(tg)) { tgt_pid <- tg$protein_id; tgt_gene <- tg$gene_id; break }
+    }
+  }
+  if (is.null(tgt_pid))
+    stop("Ensembl Compara is unavailable and no ", target_species, " protein for ", gene,
+         " could be found. Supply species protein IDs (column `species_protein_id`, e.g. ",
+         "dNdScv `pid`) or try again later.")
+  list(
+    human  = list(id = hum$gene_id, protein_id = hum$protein_id, seq = NULL),
+    target = list(id = tgt_gene, protein_id = tgt_pid, seq = NULL, perc_id = NA_real_,
+                  species = target_species, type = "fallback (Compara unavailable)")
   )
 }
 

@@ -34,8 +34,10 @@ pairwise alignment is computed.}
 genomic liftOver for rows lacking a protein position (requires rtracklayer)}
 }
 \value{
-data.table: input columns plus \code{human_aa_pos}, \code{human_chrom},
-\code{human_pos}, \code{map_method}, \code{map_note}. Attributes: \code{ortholog}, \code{alignment}.
+data.table: input columns plus \code{human_aa_pos}, \code{human_aa_change}
+(the change in human numbering with the human reference residue, e.g. a
+macaque "p.Y75C" -> "p.Y76C"), \code{human_chrom}, \code{human_pos}, \code{map_method},
+\code{map_note}. Attributes: \code{ortholog}, \code{alignment}.
 }
 \description{
 Map species mutations for one gene onto human coordinates

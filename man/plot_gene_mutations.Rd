@@ -21,18 +21,25 @@ plot_gene_mutations(
   hotspot_matches = NULL,
   highlight_colour = "gold",
   intron_linewidth = 1.1,
-  base_size = 11,
+  base_size = 14,
   italic_species = TRUE,
   max_tumour_types = 8,
   panel_heights = NULL,
+  gene_track_height = NULL,
   legend_position = "right",
   show_pictograms = TRUE,
   pictograms = list(),
   pictogram_species = NULL,
   pictogram_size = 0.14,
   strip_p = TRUE,
-  label_gap = 0.9,
-  highlight_style = c("strong", "subtle")
+  label_gap = 0.5,
+  headroom = 0.45,
+  highlight_label_box = TRUE,
+  highlight_style = c("strong", "subtle"),
+  aa_numbering = c("species", "human"),
+  gene_only = FALSE,
+  show_tss = TRUE,
+  show_direction = TRUE
 )
 }
 \arguments{
@@ -79,8 +86,11 @@ hotspot residues (see \code{\link[=match_cosmic_hotspots]{match_cosmic_hotspots(
 
 \item{max_tumour_types}{truncate the COSMIC somatic tumour-type list}
 
-\item{panel_heights}{relative heights c(upper, gene model, lower); default
+\item{panel_heights}{relative heights c(upper, lower) of the mutation panels; default
 gives COSMIC more room than the species panel}
+
+\item{gene_track_height}{height of the gene-model strip in mm (default scales
+with \code{base_size}, ~15 mm at 14 pt), fixed regardless of figure size}
 
 \item{legend_position}{"right", "bottom" or "none"}
 
@@ -101,8 +111,30 @@ silhouette; defaults to the name in \code{species_label}}
 \item{label_gap}{extra space between a lollipop head and its label, in label
 heights (the offset also grows with point size and halo)}
 
+\item{headroom}{empty space above the tallest lollipop, as a fraction of the
+sample-axis range, that holds its label inside the panel. Increase it (e.g.
+0.8) for short figures such as 16:9 slides if top labels are cut; decrease it
+to give the lollipops more height}
+
+\item{highlight_label_box}{draw labels of highlighted mutations on top of
+everything else, in a white box with a border in the highlight colour}
+
 \item{highlight_style}{"strong" (default: glow, thick ring, coloured stem,
-shaded guide band, larger label; good for slides) or "subtle"}
+shaded guide band, darker label; good for slides) or "subtle"}
+
+\item{aa_numbering}{label user mutations in "species" residue numbering
+(default) or "human" numbering with the human reference residue (column
+\code{human_aa_change} from \code{\link[=map_mutations_to_human]{map_mutations_to_human()}}; falls back to the
+species label where no human equivalent exists)}
+
+\item{gene_only}{draw only the gene model and header, leaving the two
+mutation panels blank but with exactly the same size and position as in
+the full figure (a template to stack the mutation plots on in slides);
+see \code{\link[=plot_gene_model]{plot_gene_model()}}}
+
+\item{show_tss}{mark the transcription start site with a bent arrow}
+
+\item{show_direction}{draw chevrons along introns in the direction of transcription}
 }
 \value{
 a patchwork object (ggplot); use \code{print()} or \code{ggsave()}. If

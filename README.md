@@ -77,7 +77,9 @@ res$model              # human canonical transcript, exons, CDS
 res$cosmic_mutations   # all human COSMIC mutations for TP53
 res$species_mutations  # your mutations + human_aa_pos / human_chrom / human_pos
 res$species_name       # "Macaca mulatta"
-res$hotspot_matches    # NULL unless highlight_hotspots = TRUE (see below)
+res$hotspot_matches    # user mutations at/near the top COSMIC hotspots
+res$plot_hotspots      # res$plot with those matches highlighted
+res$gene_model_plot    # gene model only, same layout (slide template)
 res$plot               # patchwork; ggsave("TP53.pdf", res$plot, width = 12, height = 8)
 ```
 
@@ -105,6 +107,12 @@ plot_gene_mutations(model, cos, mm, species_label = "Macaca mulatta (Mmul_10)",
 The figure header shows the gene name and, when a Census file is given, its role
 (oncogene / TSG / fusion) and somatic tumour types.
 
+Text defaults to `base_size = 14` for slides (lower it for print). Labels for your mutations use
+species residue numbering; `aa_numbering = "human"` relabels them in human numbering with the
+human reference residue (e.g. macaque `Y75C` -> `Y76C`), also returned as `human_aa_change` in
+`res$species_mutations`. The figure keeps identical proportions with and without hotspot
+highlighting.
+
 Plot labels omit the HGVS `p.` prefix (`strip_p = FALSE` to keep it; tables keep it) and sit
 clear of their lollipop heads (`label_gap` to adjust).
 
@@ -117,23 +125,32 @@ cited when required by the image licence. Turn off with `show_pictograms = FALSE
 your own images: `pictograms = list(species = "macaque.png", human = FALSE)`.
 
 Each panel has a small-print line with
-mapped/unmapped mutations and samples (species) or distinct mutations, calls and samples
-(COSMIC). Other layout options: `base_size`, `legend_position`, `panel_heights`. For PDFs use
+mapped/unmapped mutations and samples (species) or distinct mutations and samples (COSMIC). Other layout options: `base_size`, `legend_position`, `panel_heights` (upper, lower), `gene_track_height` (mm). For PDFs use
 `ggsave("TP53.pdf", res$plot, width = 12, height = 8, device = cairo_pdf)`.
+
+### Gene model only (slide template)
+
+`res$gene_model_plot` (or `plot_gene_model()`, same arguments as `plot_gene_mutations()`) draws
+the header and gene model - coding exons, UTRs, introns (marked "not to scale" when
+compressed), the TSS (bent arrow) and transcription direction (chevrons on introns) - with the
+mutation panels left blank at exactly the same size and position. Save both with the same
+`ggsave()` size and they overlay exactly in PowerPoint. `show_tss` / `show_direction` toggle
+the extra gene-model marks.
 
 ## Highlighting matches to COSMIC hotspots
 
 ```r
 res <- xsmut_pipeline("TP53", muts, "macaque", "Mmul_10", cos,
-                      highlight_hotspots = TRUE,   # off by default
+                      highlight_hotspots = TRUE,   # optional: makes res$plot highlighted too
                       hotspot_top_n = 10,          # top residues by COSMIC sample count
                       hotspot_window = 3,          # +/- human aa for a "close" match (0 = same residue)
                       hotspot_min_samples = 2)
+res$plot_hotspots     # same figure with matches highlighted (always produced)
 res$hotspot_matches   # match_type: "identical change", "same residue", "within N aa"
 ```
 
 Matched user mutations get a strong highlight (glow + ring, coloured stem, shaded guide band,
-larger bold label; `highlight_style = "subtle"` for a lighter version) in gold
+darker label; `highlight_style = "subtle"` for a lighter version) in gold
 (`highlight_colour = "red"` for slides, or any R colour), the hit COSMIC hotspot is ringed, and a
 dashed guide runs through all panels. `cosmic_hotspots()` and `match_cosmic_hotspots()` can be
 used on their own. COSMIC residue numbers follow COSMIC's transcript (usually MANE); user

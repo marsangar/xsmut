@@ -24,6 +24,8 @@ ui <- fluidPage(
       h4("5. Display"),
       radioButtons("species_panel", "Show my mutations in the",
                    c("Top panel" = "top", "Bottom panel" = "bottom"), inline = TRUE),
+      radioButtons("aa_num", "Label my mutations in", c("Species numbering" = "species",
+                   "Human numbering" = "human"), inline = TRUE),
       checkboxInput("compress", "Compress introns", TRUE),
       numericInput("min_label", "Label COSMIC hotspots with ≥ N samples", 5, min = 1),
       checkboxInput("highlight", "Highlight matches to top COSMIC hotspots", FALSE),
@@ -40,6 +42,7 @@ ui <- fluidPage(
       actionButton("go", "Run", class = "btn-primary"),
       br(), br(),
       downloadButton("dl_plot", "Download plot (PDF)"),
+      downloadButton("dl_gene", "Download gene model only (PDF)"),
       downloadButton("dl_table", "Download mapped mutations (CSV)"),
       downloadButton("dl_hits", "Download hotspot matches (CSV)")
     ),
@@ -82,6 +85,7 @@ server <- function(input, output, session) {
                          hotspot_min_samples = input$hs_min,
                          highlight_colour = input$hs_col, legend_position = input$legend_pos,
                          show_pictograms = isTRUE(input$pictos),
+                         aa_numbering = input$aa_num,
                          highlight_style = if (is.null(input$hs_style)) "strong" else input$hs_style,
                          compress_introns = input$compress, min_label_n = input$min_label),
           error = function(e) list(error = conditionMessage(e)))
@@ -147,6 +151,15 @@ server <- function(input, output, session) {
       res <- results(); ok <- Filter(function(r) is.null(r$error), res)
       if (capabilities("cairo")) grDevices::cairo_pdf(file, width = 12, height = 8, onefile = TRUE) else pdf(file, width = 12, height = 8)
       for (r in ok) print(r$plot)
+      dev.off()
+    })
+
+  output$dl_gene <- downloadHandler(
+    filename = function() paste0("xsmut_gene_model_", gsub("[^A-Za-z0-9]", "_", input$genes), ".pdf"),
+    content = function(file) {
+      res <- results(); ok <- Filter(function(r) is.null(r$error), res)
+      if (capabilities("cairo")) grDevices::cairo_pdf(file, width = 12, height = 8, onefile = TRUE) else pdf(file, width = 12, height = 8)
+      for (r in ok) print(r$gene_model_plot)
       dev.off()
     })
 
